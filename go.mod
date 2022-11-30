@@ -12,5 +12,5 @@ require (
 	github.com/gorilla/websocket v1.5.0 // indirect
 )
 
-replace github.com/koding/websocketproxy => github.com/dvonthenen/websocketproxy v0.0.0-20221123152421-232f862e39e2
+replace github.com/koding/websocketproxy => github.com/dvonthenen/websocketproxy v0.0.0-20221130030525-2d35aa6682e7
 // replace github.com/koding/websocketproxy => ../../koding/websocketproxy
