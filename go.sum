@@ -1,5 +1,5 @@
-github.com/dvonthenen/websocketproxy v0.0.0-20221123152421-232f862e39e2 h1:OHdRt2GLFXS8ppBJfmIyk0M0lowMPzPMcpb0tA0uAfk=
-github.com/dvonthenen/websocketproxy v0.0.0-20221123152421-232f862e39e2/go.mod h1:WJRZv/X/jzGIH75i4yqPuDIXRFAh06Vs6C6+AyX+j/Q=
+github.com/dvonthenen/websocketproxy v0.0.0-20221130030525-2d35aa6682e7 h1:4fPODd+AQTwahpu6cQ9Mb0RH038ADUBxQ+TOB+HqZes=
+github.com/dvonthenen/websocketproxy v0.0.0-20221130030525-2d35aa6682e7/go.mod h1:WJRZv/X/jzGIH75i4yqPuDIXRFAh06Vs6C6+AyX+j/Q=
 github.com/go-logr/logr v1.2.0 h1:QK40JKJyMdUDz+h+xvCsru/bJhvG0UxvePV0ufL/AcE=
 github.com/go-logr/logr v1.2.0/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
 github.com/gorilla/websocket v1.5.0 h1:PPwGk2jz7EePpoHN/+ClbZu8SPxiqlu12wZP/3sWmnc=

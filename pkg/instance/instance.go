@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/koding/websocketproxy"
 	klog "k8s.io/klog/v2"
+
+	common "github.com/koding/websocketproxy/pkg/common"
+	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
 )
 
 type InstanceOptions struct {
@@ -39,7 +41,7 @@ func (si *ServerInstance) Start() error {
 	}
 
 	go func() {
-		proxy := websocketproxy.NewProxy(websocketproxy.ProxyOptions{
+		proxy := halfproxy.NewProxy(common.ProxyOptions{
 			Url:           u,
 			NaturalTunnel: true,
 			Viewer:        NewRouter(),
