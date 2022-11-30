@@ -11,5 +11,5 @@ package sdk
 
 import (
 	_ "github.com/dvonthenen/enterprise-reference-implementation/cli/cmd"
-	// _ "github.com/dvonthenen/enterprise-reference-implementation/pkg/server"
+	_ "github.com/dvonthenen/enterprise-reference-implementation/pkg/server"
 )

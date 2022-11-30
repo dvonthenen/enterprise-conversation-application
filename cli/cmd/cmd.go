@@ -19,22 +19,34 @@ func main() {
 
 	// init
 	server.Init(server.EnterpriseInit{
-		LogLevel: server.LogLevelTrace,
+		LogLevel: server.LogLevelFull,
 	})
 
-	server := server.New(server.ServerOptions{
+	server, err := server.New(server.ServerOptions{
 		CrtFile: "localhost.crt",
 		KeyFile: "localhost.key",
 	})
+	if err != nil {
+		fmt.Printf("server.New failed. Err: %v\n", err)
+		os.Exit(1)
+	}
 
 	// start... blocking call
 	go func() {
-		server.Start()
+		err := server.Start()
+		if err != nil {
+			fmt.Printf("server.Start() failed. Err: %v\n", err)
+		}
 	}()
 
 	fmt.Print("Press ENTER to exit!\n\n")
 	input := bufio.NewScanner(os.Stdin)
 	input.Scan()
+
+	err = server.Stop()
+	if err != nil {
+		fmt.Printf("server.Stop() failed. Err: %v\n", err)
+	}
 
 	fmt.Printf("Succeeded!\n\n")
 }

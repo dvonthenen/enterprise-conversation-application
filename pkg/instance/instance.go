@@ -7,24 +7,12 @@ import (
 	"net/http"
 	"net/url"
 
-	klog "k8s.io/klog/v2"
-
 	common "github.com/koding/websocketproxy/pkg/common"
 	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
+	klog "k8s.io/klog/v2"
+
+	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/routing"
 )
-
-type InstanceOptions struct {
-	ConversationId  string
-	CrtFile         string
-	KeyFile         string
-	BindAddress     string
-	RedirectAddress string
-	Port            int
-}
-
-type ServerInstance struct {
-	Options InstanceOptions
-}
 
 func New(options InstanceOptions) *ServerInstance {
 	server := &ServerInstance{
@@ -44,14 +32,29 @@ func (si *ServerInstance) Start() error {
 		proxy := halfproxy.NewProxy(common.ProxyOptions{
 			Url:           u,
 			NaturalTunnel: true,
-			Viewer:        NewRouter(),
+			Viewer:        routing.NewRouter(&si.Options.Callback),
 		})
 
-		err = http.ListenAndServeTLS(si.Options.BindAddress, si.Options.CrtFile, si.Options.KeyFile, proxy)
+		si.server = &http.Server{
+			Addr:    si.Options.BindAddress,
+			Handler: proxy,
+		}
+
+		err = si.server.ListenAndServeTLS(si.Options.CrtFile, si.Options.KeyFile)
 		if err != nil {
-			klog.V(1).Infof("New failed. Err: %v\n", err)
+			klog.V(6).Infof("ListenAndServeTLS failed. Err: %v\n", err)
 		}
 	}()
 
 	return err
+}
+
+func (si *ServerInstance) Stop() error {
+	err := si.server.Close()
+	if err != nil {
+		klog.V(1).Infof("New failed. Err: %v\n", err)
+		return err
+	}
+
+	return nil
 }

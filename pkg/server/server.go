@@ -5,60 +5,142 @@ package server
 
 // streaming
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
-	"time"
+	"sync"
 
+	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	klog "k8s.io/klog/v2"
 
 	instance "github.com/dvonthenen/enterprise-reference-implementation/pkg/instance"
+	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/routing"
 )
 
-type ServerOptions struct {
-	CrtFile   string
-	KeyFile   string
-	StartPort int
-	EndPort   int
-}
-
-type ServerEntry struct {
-	options ServerOptions
-
-	instance map[string]*instance.ServerInstance
-}
-
-func New(options ServerOptions) *ServerEntry {
+func New(options ServerOptions) (*Server, error) {
 	if options.StartPort == 0 {
 		options.StartPort = DefaultStartPort
 	}
 	if options.EndPort == 0 {
 		options.EndPort = DefaultEndPort
 	}
-	server := &ServerEntry{
-		options:  options,
-		instance: make(map[string]*instance.ServerInstance),
+
+	var connectionStr string
+	if v := os.Getenv("NEO4J_CONNECTION"); v != "" {
+		klog.V(4).Info("NEO4J_CONNECTION found")
+		connectionStr = v
+	} else {
+		klog.Errorf("NEO4J_CONNECTION not found\n")
+		return nil, ErrInvalidInput
 	}
-	return server
+	var username string
+	if v := os.Getenv("NEO4J_USERNAME"); v != "" {
+		klog.V(4).Info("NEO4J_USERNAME found")
+		username = v
+	} else {
+		klog.Errorf("NEO4J_USERNAME not found\n")
+		return nil, ErrInvalidInput
+	}
+	var password string
+	if v := os.Getenv("NEO4J_PASSWORD"); v != "" {
+		klog.V(4).Info("NEO4J_PASSWORD found")
+		password = v
+	} else {
+		klog.Errorf("NEO4J_PASSWORD not found\n")
+		return nil, ErrInvalidInput
+	}
+
+	creds := Credentials{
+		ConnectionStr: connectionStr,
+		Username:      username,
+		Password:      password,
+	}
+
+	// auth
+	auth := neo4j.BasicAuth(creds.Username, creds.Password, "")
+
+	// You typically have one driver instance for the entire application. The
+	// driver maintains a pool of database connections to be used by the sessions.
+	// The driver is thread safe.
+	driver, err := neo4j.NewDriverWithContext(creds.ConnectionStr, auth)
+	if err != nil {
+		klog.V(1).Infof("NewDriverWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageHandler.Init ENTER\n")
+		return nil, err
+	}
+
+	// server
+	server := &Server{
+		options:        options,
+		creds:          creds,
+		instanceById:   make(map[string]*instance.ServerInstance),
+		instanceByPort: make(map[int]*instance.ServerInstance),
+		Driver:         driver,
+	}
+	return server, nil
 }
 
-func (se *ServerEntry) redirectToInstance(w http.ResponseWriter, r *http.Request) {
+func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 	// conversationId
 	conversationId := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 	klog.V(2).Infof("conversationId: %s\n", conversationId)
 
 	// does the server already exist, return the serverInstance
-	serverInstance := se.instance[conversationId]
+	serverInstance := se.instanceById[conversationId]
 	if serverInstance != nil {
 		klog.V(2).Infof("Server for conversationId (%s) already exists\n", serverInstance.Options.ConversationId)
-
 		http.Redirect(w, r, serverInstance.Options.RedirectAddress, http.StatusSeeOther)
 	}
 
+	// need to do this concurrently because the session create takes time
+	chanCallback := make(chan *routing.MessageHandler)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		// signal done
+		defer wg.Done()
+
+		// Create a neo4j session to run transactions in. Sessions are lightweight to
+		// create and use. Sessions are NOT thread safe.
+		ctx := context.Background()
+		session := se.Driver.NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
+
+		// create server
+		options := routing.MessageHandlerOptions{
+			ConversationId: conversationId,
+			Session:        session,
+		}
+		callback, err := routing.NewHandler(options)
+		if err != nil {
+			klog.V(1).Infof("server.Start failed. Err: %v\n", err)
+			http.Error(w, "Failed to create message handler", http.StatusBadRequest)
+			return
+		}
+
+		// init
+		err = callback.Init()
+		if err != nil {
+			klog.V(1).Infof("callback.Init failed. Err: %v\n", err)
+			http.Error(w, "Failed to init message handler", http.StatusBadRequest)
+			return
+		}
+
+		chanCallback <- callback
+	}()
+
 	// get random port
 	diff := se.options.EndPort - se.options.StartPort
-	random := se.options.StartPort + rand.Intn(diff)
+	var random int
+	for {
+		random = se.options.StartPort + rand.Intn(diff)
+		if se.instanceByPort[random] == nil {
+			break // found an unused port
+		}
+	}
 
 	// bind address
 	newServer := fmt.Sprintf("%s:%d", r.URL.Host, random)
@@ -72,7 +154,6 @@ func (se *ServerEntry) redirectToInstance(w http.ResponseWriter, r *http.Request
 	newRedirect := fmt.Sprintf("https://%s:%d", redirect, random)
 	klog.V(2).Infof("newRedirect: %s\n", newRedirect)
 
-	// create server
 	server := instance.New(instance.InstanceOptions{
 		Port:            random,
 		BindAddress:     newServer,
@@ -80,30 +161,67 @@ func (se *ServerEntry) redirectToInstance(w http.ResponseWriter, r *http.Request
 		ConversationId:  conversationId,
 		CrtFile:         se.options.CrtFile,
 		KeyFile:         se.options.KeyFile,
+		Callback:        <-chanCallback,
 	})
 
 	err := server.Start()
 	if err != nil {
 		klog.V(1).Infof("server.Start failed. Err: %v\n", err)
+		http.Error(w, "Failed to start server instance", http.StatusBadRequest)
+		return
 	}
-	se.instance[conversationId] = server
+	se.instanceById[conversationId] = server
+	se.instanceByPort[random] = server
 
-	// small delay
-	time.Sleep(time.Millisecond * 250)
+	// wait for everyone to finish
+	wg.Wait()
 
 	// redirect
 	http.Redirect(w, r, newRedirect, http.StatusSeeOther)
 }
 
-func (se *ServerEntry) Start() {
+func (se *Server) Start() error {
 	// redirect
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", se.redirectToInstance)
 
-	// this is a blocking cal
-	klog.V(2).Infof("Starting server...\n")
-	err := http.ListenAndServeTLS(":443", se.options.CrtFile, se.options.KeyFile, mux)
-	if err != nil {
-		fmt.Printf("New failed. Err: %v\n", err)
+	se.server = &http.Server{
+		Addr:    ":443",
+		Handler: mux,
 	}
+
+	// this is a blocking call
+	klog.V(2).Infof("Starting server...\n")
+	err := se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
+	if err != nil {
+		klog.V(6).Infof("ListenAndServeTLS failed. Err: %v\n", err)
+	}
+
+	return nil
+}
+
+// TODO check for dead instances
+
+func (se *Server) Stop() error {
+	// stop all instances
+	for _, instance := range se.instanceById {
+		err := instance.Stop()
+		if err != nil {
+			fmt.Printf("instance.Stop() failed. Err: %v\n", err)
+		}
+	}
+	se.instanceById = make(map[string]*instance.ServerInstance)
+	se.instanceByPort = make(map[int]*instance.ServerInstance)
+
+	// clean up neo4j driver
+	ctx := context.Background()
+	se.Driver.Close(ctx)
+
+	// stop this endpoint
+	err := se.server.Close()
+	if err != nil {
+		fmt.Printf("server.Stop() failed. Err: %v\n", err)
+	}
+
+	return nil
 }
