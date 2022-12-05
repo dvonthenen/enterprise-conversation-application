@@ -387,24 +387,24 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 	for _, entity := range er.Entities {
 
 		// match id
-		matchId := fmt.Sprint("%s_%s_%s", entity.Type, entity.SubType, entity.Category)
+		entityId := fmt.Sprintf("%s_%s_%s", entity.Type, entity.SubType, entity.Category)
 
 		// entity
 		_, err := mh.Session.ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createEntitiesQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
-					MERGE (e:Entity { entityId: $matchId })
+					MERGE (e:Entity { entityId: $entityId })
 						ON CREATE SET
 							e.lastAccessed = timestamp()
 						ON MATCH SET
 							e.lastAccessed = timestamp()
-					SET e = { entityId: $matchId, type: $type, subType: $sub_type, category: $category, raw: $raw }
+					SET e = { entityId: $entityId, type: $type, subType: $sub_type, category: $category, raw: $raw }
 					MERGE (c)-[:ENTITY]-(e)
 					`
 				result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
 					"conversation_id": mh.ConversationId,
-					"matchId":         matchId,
+					"entityId":        entityId,
 					"type":            entity.Type,
 					"sub_type":        entity.SubType,
 					"category":        entity.Category,
@@ -425,24 +425,24 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 		for _, match := range entity.Matches {
 
 			// generate a unique ID
-			uniqueId := fmt.Sprint("%s_%s", mh.ConversationId, matchId)
+			matchId := fmt.Sprint("%s_%s", mh.ConversationId, entityId)
 
 			// match
 			_, err = mh.Session.ExecuteWrite(ctx,
 				func(tx neo4j.ManagedTransaction) (any, error) {
 					createEntitiesQuery := `
-						MATCH (e:Entity { entityId: $matchId })
-						MERGE (m:EntityMatch { matchId: $uniqueId })
+						MATCH (e:Entity { entityId: $entityId })
+						MERGE (m:EntityMatch { matchId: $matchId })
 							ON CREATE SET
 								m.lastAccessed = timestamp()
 							ON MATCH SET
 								m.lastAccessed = timestamp()
-						SET m = { matchId: $uniqueId, value: $value }
+						SET m = { matchId: $matchId, value: $value }
 						MERGE (e)-[:ENTITY_MATCH_REF]-(m)
 						`
 					result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
+						"entityId": entityId,
 						"matchId":  matchId,
-						"uniqueId": uniqueId,
 						"value":    match.DetectedValue,
 					})
 					if err != nil {
@@ -461,12 +461,12 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 				_, err = mh.Session.ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
 						createEntitiesQuery := `
-							MATCH (e:EntityMatch { entityId: $uniqueId })
-							MATCH (m:Message { matchId: $message_id })
+							MATCH (e:EntityMatch { matchId: $matchId })
+							MATCH (m:Message { messageId: $message_id })
 							MERGE (e)-[:ENTITY_MESSAGE_REF]-(m)
 							`
 						result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
-							"uniqueId":   uniqueId,
+							"matchId":    matchId,
 							"value":      match.DetectedValue,
 							"message_id": msgRef.ID,
 						})
