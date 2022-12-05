@@ -241,7 +241,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 					createTopicsQuery := `
 						MATCH (t:Topic { topicId: $topic_id })
 						MATCH (m:Message { messageId: $message_id })
-						MERGE (t)-[:MESSAGE_REF]-(m)
+						MERGE (t)-[:TOPIC_MESSAGE_REF]-(m)
 						`
 					result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
 						"topic_id":   topic.ID,
