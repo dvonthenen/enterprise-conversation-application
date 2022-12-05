@@ -425,7 +425,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 		for _, match := range entity.Matches {
 
 			// generate a unique ID
-			matchId := fmt.Sprint("%s_%s", mh.ConversationId, entityId)
+			matchId := fmt.Sprintf("%s_%s", mh.ConversationId, entityId)
 
 			// match
 			_, err = mh.Session.ExecuteWrite(ctx,
