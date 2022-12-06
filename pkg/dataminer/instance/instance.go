@@ -11,7 +11,7 @@ import (
 	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
 	klog "k8s.io/klog/v2"
 
-	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/routing"
+	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/routing"
 )
 
 func New(options InstanceOptions) *ServerInstance {

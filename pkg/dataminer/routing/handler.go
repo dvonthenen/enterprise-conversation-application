@@ -7,9 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	amqp "github.com/rabbitmq/amqp091-go"
 	klog "k8s.io/klog/v2"
 )
 
@@ -21,7 +23,8 @@ func NewHandler(options MessageHandlerOptions) (*MessageHandler, error) {
 
 	mh := &MessageHandler{
 		ConversationId: options.ConversationId,
-		Session:        options.Session,
+		session:        options.Session,
+		rabbitChan:     options.RabbitChan,
 	}
 	return mh, nil
 }
@@ -30,10 +33,11 @@ func (mh *MessageHandler) Init() error {
 	klog.V(6).Infof("MessageHandler.Init ENTER\n")
 
 	// context
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// create conversation object
-	_, err := mh.Session.ExecuteWrite(ctx,
+	// neo4j create conversation object
+	_, err := mh.session.ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
 			createConversationQuery := `
 				MERGE (c:Conversation { conversationId: $conversation_id })
@@ -54,6 +58,32 @@ func (mh *MessageHandler) Init() error {
 		return err
 	}
 
+	// rabbitmq
+	convo := &Conversation{
+		ConversationId: mh.ConversationId,
+	}
+
+	data, err := json.Marshal(convo)
+	if err != nil {
+		klog.V(1).Infof("RecognitionResult json.Marshal failed. Err: %v\n", err)
+		return err
+	}
+
+	err = mh.rabbitChan.PublishWithContext(ctx,
+		"conversation-created", // exchange
+		"",                     // routing key
+		false,                  // mandatory
+		false,                  // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        data,
+		})
+	if err != nil {
+		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
+		return err
+	}
+
 	klog.V(4).Infof("Init Succeeded\n")
 	klog.V(6).Infof("MessageHandler.Init LEAVE\n")
 
@@ -65,7 +95,7 @@ func (mh *MessageHandler) Teardown() error {
 
 	// close the session
 	ctx := context.Background()
-	mh.Session.Close(ctx)
+	mh.session.Close(ctx)
 
 	klog.V(4).Infof("Teardown Succeeded\n")
 	klog.V(6).Infof("MessageHandler.Teardown LEAVE\n")
@@ -80,13 +110,11 @@ func (mh *MessageHandler) RecognitionResultMessage(rr *interfaces.RecognitionRes
 		return err
 	}
 
-	// We probably don't actually need this. Will just leave the debug statements here
-	// for future use
-	// TODO: fix level
-	klog.V(3).Infof("\n\n-------------------------------\n")
-	klog.V(3).Infof("RecognitionResultMessage Object DUMP:\n%v\n\n", string(data))
-	klog.V(3).Infof("\nMessage:\n%v\n\n", rr.Message.Punctuated.Transcript)
-	klog.V(3).Infof("-------------------------------\n\n")
+	// We probably don't actually need this. Will just leave the debug statements here for future use
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(6).Infof("RecognitionResultMessage:\n%v\n\n", string(data))
+	klog.V(6).Infof("\nMessage:\n%v\n\n", rr.Message.Punctuated.Transcript)
+	klog.V(6).Infof("-------------------------------\n\n")
 
 	return nil
 }
@@ -99,17 +127,18 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 	}
 
 	// TODO: fix level
-	klog.V(3).Infof("\n\n-------------------------------\n")
-	klog.V(3).Infof("MessageResponseMessage Object DUMP:\n%v\n", string(data))
-	klog.V(3).Infof("-------------------------------\n\n")
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(4).Infof("MessageResponseMessage:\n%v\n", string(data))
+	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	// if we need to do something with them
 	// for records, message := range mr.Messages {
 	for _, message := range mr.Messages {
-		_, err := mh.Session.ExecuteWrite(ctx,
+		_, err := mh.session.ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createMessageToPeopleQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
@@ -125,8 +154,8 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 						ON MATCH SET
 							u.lastAccessed = timestamp()
 					SET u = { realId: $user_real_id, userId: $user_id, name: $user_name, email: $user_id }
-					MERGE (c)-[:MESSAGES]-(m)
-					MERGE (m)-[:SPOKE]-(u)
+					MERGE (c)-[:MESSAGES { conversationId: $conversation_id }]-(m)
+					MERGE (m)-[:SPOKE { conversationId: $conversation_id }]-(u)
 					`
 				result, err := tx.Run(ctx, createMessageToPeopleQuery, map[string]any{
 					"conversation_id": mh.ConversationId,
@@ -153,7 +182,20 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 		}
 	}
 
-	// TODO: pub/sub
+	// rabbitmq
+	err = mh.rabbitChan.PublishWithContext(ctx,
+		"message-created", // exchange
+		"",                // routing key
+		false,             // mandatory
+		false,             // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        data,
+		})
+	if err != nil {
+		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		return err
+	}
 
 	return nil
 }
@@ -174,10 +216,10 @@ func (mh *MessageHandler) InsightResponseMessage(ir *interfaces.InsightResponse)
 				return err
 			}
 
-			// TODO: fix level
-			klog.V(3).Infof("\n\n-------------------------------\n")
-			klog.V(3).Infof("TopicResponseMessage Object DUMP:\n%v\n", string(data))
-			klog.V(3).Infof("-------------------------------\n\n")
+			klog.V(1).Infof("\n\n-------------------------------\n")
+			klog.V(1).Infof("Unknown InsightResponseMessage:\n\n")
+			klog.V(1).Infof("Object DUMP:\n%v\n\n", string(data))
+			klog.V(1).Infof("-------------------------------\n\n")
 			return nil
 		}
 	}
@@ -193,15 +235,16 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 	}
 
 	// TODO: fix level
-	klog.V(3).Infof("\n\n-------------------------------\n")
-	klog.V(3).Infof("TopicResponseMessage Object DUMP:\n%v\n", string(data))
-	klog.V(3).Infof("-------------------------------\n\n")
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(4).Infof("TopicResponseMessage:\n%v\n", string(data))
+	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	for _, topic := range tr.Topics {
-		_, err := mh.Session.ExecuteWrite(ctx,
+		_, err := mh.session.ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createTopicsQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
@@ -211,7 +254,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 						ON MATCH SET
 							t.lastAccessed = timestamp()
 					SET t = { topicId: $topic_id, phrases: $phrases, score: $score, type: $type, messageIndex: $message_index, rootWords: $root_words, raw: $raw }
-					MERGE (c)-[:TOPICS]-(t)
+					MERGE (c)-[:TOPICS { conversationId: $conversation_id }]-(t)
 					`
 				result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
 					"conversation_id": mh.ConversationId,
@@ -236,12 +279,12 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 
 		// associate topic to message
 		for _, ref := range topic.MessageReferences {
-			_, err = mh.Session.ExecuteWrite(ctx,
+			_, err = mh.session.ExecuteWrite(ctx,
 				func(tx neo4j.ManagedTransaction) (any, error) {
 					createTopicsQuery := `
 						MATCH (t:Topic { topicId: $topic_id })
 						MATCH (m:Message { messageId: $message_id })
-						MERGE (t)-[:TOPIC_MESSAGE_REF]-(m)
+						MERGE (t)-[:TOPIC_MESSAGE_REF { conversationId: $conversation_id }]-(m)
 						`
 					result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
 						"topic_id":   topic.ID,
@@ -260,7 +303,20 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 		}
 	}
 
-	// TODO: pub/sub
+	// rabbitmq
+	err = mh.rabbitChan.PublishWithContext(ctx,
+		"topic-created", // exchange
+		"",              // routing key
+		false,           // mandatory
+		false,           // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        data,
+		})
+	if err != nil {
+		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		return err
+	}
 
 	return nil
 }
@@ -272,15 +328,16 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 	}
 
 	// TODO: fix level
-	klog.V(3).Infof("\n\n-------------------------------\n")
-	klog.V(3).Infof("TrackerResponseMessage Object DUMP:\n%v\n", string(data))
-	klog.V(3).Infof("-------------------------------\n\n")
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(4).Infof("TrackerResponseMessage:\n%v\n", string(data))
+	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	for _, tracker := range tr.Trackers {
-		_, err := mh.Session.ExecuteWrite(ctx,
+		_, err := mh.session.ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createTrackersQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
@@ -290,7 +347,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 						ON MATCH SET
 							t.lastAccessed = timestamp()
 					SET t = { trackerId: $tracker_id, name: $tracker_name, raw: $raw }
-					MERGE (c)-[:TRACKER]-(t)
+					MERGE (c)-[:TRACKER { conversationId: $conversation_id }]-(t)
 					`
 				result, err := tx.Run(ctx, createTrackersQuery, map[string]any{
 					"conversation_id": mh.ConversationId,
@@ -314,12 +371,12 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 
 			// messages
 			for _, msgRef := range match.MessageRefs {
-				_, err = mh.Session.ExecuteWrite(ctx,
+				_, err = mh.session.ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
 						createTopicsQuery := `
 							MATCH (t:Tracker { trackerId: $tracker_id })
 							MATCH (m:Message { messageId: $message_id })
-							MERGE (t)-[:TRACKER_MESSAGE_REF]-(m)
+							MERGE (t)-[:TRACKER_MESSAGE_REF { conversationId: $conversation_id }]-(m)
 							`
 						result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
 							"tracker_id": tracker.ID,
@@ -339,12 +396,12 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 
 			// insights
 			for _, inRef := range match.InsightRefs {
-				_, err = mh.Session.ExecuteWrite(ctx,
+				_, err = mh.session.ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
 						createTrackerMatchQuery := `
 							MATCH (t:TrackerMatch { trackerId: $tracker_id })
 							MATCH (i:Insight { insightId: $insight_id })
-							MERGE (t)-[:TRACKER_INSIGHT_REF]-(i)
+							MERGE (t)-[:TRACKER_INSIGHT_REF { conversationId: $conversation_id }]-(i)
 							`
 						result, err := tx.Run(ctx, createTrackerMatchQuery, map[string]any{
 							"tracker_id": tracker.ID,
@@ -364,7 +421,20 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 		}
 	}
 
-	// TODO: pub/sub
+	// rabbitmq
+	err = mh.rabbitChan.PublishWithContext(ctx,
+		"tracker-created", // exchange
+		"",                // routing key
+		false,             // mandatory
+		false,             // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        data,
+		})
+	if err != nil {
+		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		return err
+	}
 
 	return nil
 }
@@ -377,12 +447,13 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 	}
 
 	// TODO: fix level
-	klog.V(3).Infof("\n\n-------------------------------\n")
-	klog.V(3).Infof("EntityResponseMessage Object DUMP:\n%v\n", string(data))
-	klog.V(3).Infof("-------------------------------\n\n")
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(4).Infof("EntityResponseMessage:\n%v\n", string(data))
+	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	for _, entity := range er.Entities {
 
@@ -390,7 +461,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 		entityId := fmt.Sprintf("%s_%s_%s", entity.Type, entity.SubType, entity.Category)
 
 		// entity
-		_, err := mh.Session.ExecuteWrite(ctx,
+		_, err := mh.session.ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createEntitiesQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
@@ -400,7 +471,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 						ON MATCH SET
 							e.lastAccessed = timestamp()
 					SET e = { entityId: $entityId, type: $type, subType: $sub_type, category: $category, raw: $raw }
-					MERGE (c)-[:ENTITY]-(e)
+					MERGE (c)-[:ENTITY { conversationId: $conversation_id }]-(e)
 					`
 				result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
 					"conversation_id": mh.ConversationId,
@@ -428,7 +499,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 			matchId := fmt.Sprintf("%s_%s", mh.ConversationId, entityId)
 
 			// match
-			_, err = mh.Session.ExecuteWrite(ctx,
+			_, err = mh.session.ExecuteWrite(ctx,
 				func(tx neo4j.ManagedTransaction) (any, error) {
 					createEntitiesQuery := `
 						MATCH (e:Entity { entityId: $entityId })
@@ -438,7 +509,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 							ON MATCH SET
 								m.lastAccessed = timestamp()
 						SET m = { matchId: $matchId, value: $value }
-						MERGE (e)-[:ENTITY_MATCH_REF]-(m)
+						MERGE (e)-[:ENTITY_MATCH_REF { conversationId: $conversation_id }]-(m)
 						`
 					result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
 						"entityId": entityId,
@@ -458,12 +529,12 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 
 			// message
 			for _, msgRef := range match.MessageRefs {
-				_, err = mh.Session.ExecuteWrite(ctx,
+				_, err = mh.session.ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
 						createEntitiesQuery := `
 							MATCH (e:EntityMatch { matchId: $matchId })
 							MATCH (m:Message { messageId: $message_id })
-							MERGE (e)-[:ENTITY_MESSAGE_REF]-(m)
+							MERGE (e)-[:ENTITY_MESSAGE_REF { conversationId: $conversation_id }]-(m)
 							`
 						result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
 							"matchId":    matchId,
@@ -484,15 +555,28 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 		}
 	}
 
-	// TODO: pub/sub
+	// rabbitmq
+	err = mh.rabbitChan.PublishWithContext(ctx,
+		"entity-created", // exchange
+		"",               // routing key
+		false,            // mandatory
+		false,            // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        data,
+		})
+	if err != nil {
+		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		return err
+	}
 
 	return nil
 }
 
 func (mh *MessageHandler) UnhandledMessage(byMsg []byte) error {
-	klog.V(3).Infof("\n\n-------------------------------\n")
-	klog.V(3).Infof("UnhandledMessage Object DUMP:\n%v\n", string(byMsg))
-	klog.V(3).Infof("-------------------------------\n\n")
+	klog.V(1).Infof("\n\n-------------------------------\n")
+	klog.V(1).Infof("UnhandledMessage:\n%v\n", string(byMsg))
+	klog.V(1).Infof("-------------------------------\n\n")
 	return nil
 }
 
@@ -516,16 +600,17 @@ func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
 	}
 
 	// TODO: fix level
-	klog.V(3).Infof("\n\n-------------------------------\n")
-	klog.V(3).Infof("handleInsight Object DUMP:\n%v\n", string(data))
-	klog.V(3).Infof("-------------------------------\n\n")
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(4).Infof("handleInsight:\n%v\n", string(data))
+	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
 	// if we need to do something with them
 	// for records, message := range mr.Messages {
-	_, err = mh.Session.ExecuteWrite(ctx,
+	_, err = mh.session.ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
 			createInsightQuery := `
 				MATCH (c:Conversation { conversationId: $conversation_id })
@@ -541,8 +626,8 @@ func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
 					ON MATCH SET
 						u.lastAccessed = timestamp()
 				SET u = { realId: $user_real_id, userId: $user_id, name: $user_name, email: $user_id }
-				MERGE (c)-[:INSIGHT]-(i)
-				MERGE (i)-[:SPOKE]-(u)
+				MERGE (c)-[:INSIGHT { conversationId: $conversation_id }]-(i)
+				MERGE (i)-[:SPOKE { conversationId: $conversation_id }]-(u)
 				`
 			result, err := tx.Run(ctx, createInsightQuery, map[string]any{
 				"conversation_id": mh.ConversationId,
@@ -566,7 +651,20 @@ func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
 		return err
 	}
 
-	// TODO: pub/sub
+	// rabbitmq
+	err = mh.rabbitChan.PublishWithContext(ctx,
+		"insight-created", // exchange
+		"",                // routing key
+		false,             // mandatory
+		false,             // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        data,
+		})
+	if err != nil {
+		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		return err
+	}
 
 	return nil
 }

@@ -6,12 +6,23 @@ package routing
 import (
 	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+// Conversation Struct
+type Conversation struct {
+	ConversationId string `json:"conversationId,omitempty"`
+}
 
 // MessageHandlerOptions to init the handler
 type MessageHandlerOptions struct {
 	ConversationId string
-	Session        neo4j.SessionWithContext
+
+	// neo4j session
+	Session neo4j.SessionWithContext
+
+	// rabbitmq
+	RabbitChan *amqp.Channel
 }
 
 // MessageRouter converts messages to Symbl objects
@@ -25,5 +36,8 @@ type MessageHandler struct {
 	ConversationId string
 
 	// neo4j
-	Session neo4j.SessionWithContext
+	session neo4j.SessionWithContext
+
+	// rabbitmq
+	rabbitChan *amqp.Channel
 }

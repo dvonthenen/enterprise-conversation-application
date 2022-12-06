@@ -8,8 +8,9 @@ import (
 	"net/http"
 
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	amqp "github.com/rabbitmq/amqp091-go"
 
-	instance "github.com/dvonthenen/enterprise-reference-implementation/pkg/instance"
+	instance "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/instance"
 )
 
 // Credentials is the input needed to login to neo4j
@@ -39,4 +40,8 @@ type Server struct {
 
 	// neo4j
 	Driver neo4j.DriverWithContext
+
+	// rabbitmq
+	rabbitConn *amqp.Connection
+	rabbitChan *amqp.Channel
 }
