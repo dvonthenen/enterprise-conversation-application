@@ -22,10 +22,11 @@ type Credentials struct {
 
 // ServerOptions for the main HTTP endpoint
 type ServerOptions struct {
-	CrtFile   string
-	KeyFile   string
-	StartPort int
-	EndPort   int
+	CrtFile     string
+	KeyFile     string
+	StartPort   int
+	EndPort     int
+	RabbitMQURI string
 }
 
 type Server struct {
@@ -39,9 +40,8 @@ type Server struct {
 	server         *http.Server
 
 	// neo4j
-	Driver neo4j.DriverWithContext
+	driver *neo4j.DriverWithContext
 
 	// rabbitmq
 	rabbitConn *amqp.Connection
-	rabbitChan *amqp.Channel
 }

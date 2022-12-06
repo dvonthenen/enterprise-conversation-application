@@ -60,26 +60,13 @@ func New(options ServerOptions) (*Server, error) {
 		Password:      password,
 	}
 
-	// auth
-	auth := neo4j.BasicAuth(creds.Username, creds.Password, "")
-
-	// You typically have one driver instance for the entire application. The
-	// driver maintains a pool of database connections to be used by the sessions.
-	// The driver is thread safe.
-	driver, err := neo4j.NewDriverWithContext(creds.ConnectionStr, auth)
-	if err != nil {
-		klog.V(1).Infof("NewDriverWithContext failed. Err: %v\n", err)
-		klog.V(6).Infof("MessageHandler.Init ENTER\n")
-		return nil, err
-	}
-
 	// server
 	server := &Server{
 		options:        options,
 		creds:          creds,
 		instanceById:   make(map[string]*instance.ServerInstance),
 		instanceByPort: make(map[int]*instance.ServerInstance),
-		Driver:         driver,
+		driver:         nil,
 	}
 	return server, nil
 }
@@ -108,13 +95,13 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 		// Create a neo4j session to run transactions in. Sessions are lightweight to
 		// create and use. Sessions are NOT thread safe.
 		ctx := context.Background()
-		session := se.Driver.NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
+		session := (*se.driver).NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
 
 		// create server
 		options := routing.MessageHandlerOptions{
-			ConversationId: conversationId,
-			Session:        session,
-			RabbitChan:     se.rabbitChan,
+			ConversationId:   conversationId,
+			Session:          &session,
+			RabbitConnection: se.rabbitConn,
 		}
 		callback, err := routing.NewHandler(options)
 		if err != nil {
@@ -183,6 +170,20 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (se *Server) Start() error {
+	// neo4j
+	err := se.RebuildDatabase()
+	if err != nil {
+		klog.V(6).Infof("RebuildDatabase failed. Err: %v\n", err)
+		return err
+	}
+
+	// rabbitmq
+	err = se.RebuildMessageBus()
+	if err != nil {
+		klog.V(6).Infof("RebuildDatabase failed. Err: %v\n", err)
+		return err
+	}
+
 	// redirect
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", se.redirectToInstance)
@@ -196,7 +197,7 @@ func (se *Server) Start() error {
 
 	// this is a blocking call
 	klog.V(2).Infof("Starting server...\n")
-	err := se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
+	err = se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
 	if err != nil {
 		klog.V(6).Infof("ListenAndServeTLS failed. Err: %v\n", err)
 	}
@@ -204,35 +205,47 @@ func (se *Server) Start() error {
 	return nil
 }
 
+func (se *Server) RebuildDatabase() error {
+	//teardown
+	if se.driver != nil {
+		ctx := context.Background()
+		(*se.driver).Close(ctx)
+		se.driver = nil
+	}
+
+	// init
+	// auth
+	auth := neo4j.BasicAuth(se.creds.Username, se.creds.Password, "")
+
+	// You typically have one driver instance for the entire application. The
+	// driver maintains a pool of database connections to be used by the sessions.
+	// The driver is thread safe.
+	driver, err := neo4j.NewDriverWithContext(se.creds.ConnectionStr, auth)
+	if err != nil {
+		klog.V(1).Infof("NewDriverWithContext failed. Err: %v\n", err)
+		return err
+	}
+
+	se.driver = &driver
+
+	return err
+}
+
 func (se *Server) RebuildMessageBus() error {
-	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	// teardown
+	if se.rabbitConn != nil {
+		se.rabbitConn.Close()
+		se.rabbitConn = nil
+	}
+
+	// init
+	conn, err := amqp.Dial(se.options.RabbitMQURI)
 	if err != nil {
 		klog.V(1).Infof("amqp.Dial failed. Err: %v\n", err)
 		return err
 	}
 
-	ch, err := conn.Channel()
-	if err != nil {
-		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
-		return err
-	}
-
-	err = ch.ExchangeDeclare(
-		"create-conversation", // name
-		"fanout",              // type
-		true,                  // durable
-		true,                  // auto-deleted
-		false,                 // internal
-		false,                 // no-wait
-		nil,                   // arguments
-	)
-	if err != nil {
-		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
-		return err
-	}
-
 	// save to pass onto instances
-	se.rabbitChan = ch
 	se.rabbitConn = conn
 
 	return nil
@@ -253,11 +266,10 @@ func (se *Server) Stop() error {
 
 	// clean up neo4j driver
 	ctx := context.Background()
-	se.Driver.Close(ctx)
+	(*se.driver).Close(ctx)
 
 	// clean up rabbitmq
 	se.rabbitConn.Close()
-	se.rabbitChan.Close()
 
 	// stop this endpoint
 	err := se.server.Close()

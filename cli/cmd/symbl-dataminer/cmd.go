@@ -23,8 +23,9 @@ func main() {
 	})
 
 	dataminer, err := dataminer.New(dataminer.ServerOptions{
-		CrtFile: "localhost.crt",
-		KeyFile: "localhost.key",
+		CrtFile:     "localhost.crt",
+		KeyFile:     "localhost.key",
+		RabbitMQURI: "amqp://guest:guest@localhost:5672",
 	})
 	if err != nil {
 		fmt.Printf("dataminer.New failed. Err: %v\n", err)
