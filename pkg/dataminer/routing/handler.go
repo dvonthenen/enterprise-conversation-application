@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
@@ -22,9 +23,10 @@ func NewHandler(options MessageHandlerOptions) (*MessageHandler, error) {
 	}
 
 	mh := &MessageHandler{
-		ConversationId: options.ConversationId,
-		session:        options.Session,
-		rabbitChan:     options.RabbitChan,
+
+		ConversationId:   options.ConversationId,
+		session:          options.Session,
+		rabbitConnection: options.RabbitConnection,
 	}
 	return mh, nil
 }
@@ -32,12 +34,28 @@ func NewHandler(options MessageHandlerOptions) (*MessageHandler, error) {
 func (mh *MessageHandler) Init() error {
 	klog.V(6).Infof("MessageHandler.Init ENTER\n")
 
+	// init all rabbit channels
+	var rabbitErr error
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		// signal done
+		defer wg.Done()
+
+		err := mh.setupRabbitChannels()
+		if err != nil {
+			klog.V(1).Infof("setupRabbitChannels failed. Err: %v\n", err)
+		}
+		rabbitErr = err
+	}()
+
 	// context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// neo4j create conversation object
-	_, err := mh.session.ExecuteWrite(ctx,
+	_, err := (*mh.session).ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
 			createConversationQuery := `
 				MERGE (c:Conversation { conversationId: $conversation_id })
@@ -58,7 +76,151 @@ func (mh *MessageHandler) Init() error {
 		return err
 	}
 
+	// wait for everyone to finish
+	wg.Wait()
+
+	if rabbitErr != nil {
+		klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", rabbitErr)
+		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
+		return rabbitErr
+	}
+
+	klog.V(4).Infof("Init Succeeded\n")
+	klog.V(6).Infof("MessageHandler.Init LEAVE\n")
+
+	return nil
+}
+
+func (mh *MessageHandler) setupRabbitChannels() error {
+	// convo
+	ch, err := mh.rabbitConnection.Channel()
+	if err != nil {
+		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		return err
+	}
+	err = ch.ExchangeDeclare(
+		"create-conversation", // name
+		"fanout",              // type
+		true,                  // durable
+		true,                  // auto-deleted
+		false,                 // internal
+		false,                 // no-wait
+		nil,                   // arguments
+	)
+	if err != nil {
+		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
+		return err
+	}
+	mh.rabbitConvo = ch
+
+	// messages
+	ch, err = mh.rabbitConnection.Channel()
+	if err != nil {
+		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		return err
+	}
+	err = ch.ExchangeDeclare(
+		"create-message", // name
+		"fanout",         // type
+		true,             // durable
+		true,             // auto-deleted
+		false,            // internal
+		false,            // no-wait
+		nil,              // arguments
+	)
+	if err != nil {
+		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
+		return err
+	}
+	mh.rabbitMessages = ch
+
+	// topics
+	ch, err = mh.rabbitConnection.Channel()
+	if err != nil {
+		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		return err
+	}
+	err = ch.ExchangeDeclare(
+		"create-topic", // name
+		"fanout",       // type
+		true,           // durable
+		true,           // auto-deleted
+		false,          // internal
+		false,          // no-wait
+		nil,            // arguments
+	)
+	if err != nil {
+		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
+		return err
+	}
+	mh.rabbitTopics = ch
+
+	// tracker
+	ch, err = mh.rabbitConnection.Channel()
+	if err != nil {
+		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		return err
+	}
+	err = ch.ExchangeDeclare(
+		"create-tracker", // name
+		"fanout",         // type
+		true,             // durable
+		true,             // auto-deleted
+		false,            // internal
+		false,            // no-wait
+		nil,              // arguments
+	)
+	if err != nil {
+		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
+		return err
+	}
+	mh.rabbitTrackers = ch
+
+	// entity
+	ch, err = mh.rabbitConnection.Channel()
+	if err != nil {
+		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		return err
+	}
+	err = ch.ExchangeDeclare(
+		"create-entity", // name
+		"fanout",        // type
+		true,            // durable
+		true,            // auto-deleted
+		false,           // internal
+		false,           // no-wait
+		nil,             // arguments
+	)
+	if err != nil {
+		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
+		return err
+	}
+	mh.rabbitEntity = ch
+
+	// insight
+	ch, err = mh.rabbitConnection.Channel()
+	if err != nil {
+		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		return err
+	}
+	err = ch.ExchangeDeclare(
+		"create-insight", // name
+		"fanout",         // type
+		true,             // durable
+		true,             // auto-deleted
+		false,            // internal
+		false,            // no-wait
+		nil,              // arguments
+	)
+	if err != nil {
+		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
+		return err
+	}
+	mh.rabbitInsight = ch
+
 	// rabbitmq
+	ctx := context.Background()
+
 	convo := &Conversation{
 		ConversationId: mh.ConversationId,
 	}
@@ -66,10 +228,11 @@ func (mh *MessageHandler) Init() error {
 	data, err := json.Marshal(convo)
 	if err != nil {
 		klog.V(1).Infof("RecognitionResult json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
 		return err
 	}
 
-	err = mh.rabbitChan.PublishWithContext(ctx,
+	err = mh.rabbitConvo.PublishWithContext(ctx,
 		"conversation-created", // exchange
 		"",                     // routing key
 		false,                  // mandatory
@@ -84,9 +247,6 @@ func (mh *MessageHandler) Init() error {
 		return err
 	}
 
-	klog.V(4).Infof("Init Succeeded\n")
-	klog.V(6).Infof("MessageHandler.Init LEAVE\n")
-
 	return nil
 }
 
@@ -95,7 +255,33 @@ func (mh *MessageHandler) Teardown() error {
 
 	// close the session
 	ctx := context.Background()
-	mh.session.Close(ctx)
+	(*mh.session).Close(ctx)
+
+	// close channels
+	if mh.rabbitConvo != nil {
+		mh.rabbitConvo.Close()
+		mh.rabbitConvo = nil
+	}
+	if mh.rabbitMessages != nil {
+		mh.rabbitMessages.Close()
+		mh.rabbitMessages = nil
+	}
+	if mh.rabbitTopics != nil {
+		mh.rabbitTopics.Close()
+		mh.rabbitTopics = nil
+	}
+	if mh.rabbitTrackers != nil {
+		mh.rabbitTrackers.Close()
+		mh.rabbitTrackers = nil
+	}
+	if mh.rabbitEntity != nil {
+		mh.rabbitEntity.Close()
+		mh.rabbitEntity = nil
+	}
+	if mh.rabbitInsight != nil {
+		mh.rabbitInsight.Close()
+		mh.rabbitInsight = nil
+	}
 
 	klog.V(4).Infof("Teardown Succeeded\n")
 	klog.V(6).Infof("MessageHandler.Teardown LEAVE\n")
@@ -138,7 +324,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 	// if we need to do something with them
 	// for records, message := range mr.Messages {
 	for _, message := range mr.Messages {
-		_, err := mh.session.ExecuteWrite(ctx,
+		_, err := (*mh.session).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createMessageToPeopleQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
@@ -183,7 +369,9 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 	}
 
 	// rabbitmq
-	err = mh.rabbitChan.PublishWithContext(ctx,
+	ctx = context.Background()
+
+	err = mh.rabbitMessages.PublishWithContext(ctx,
 		"message-created", // exchange
 		"",                // routing key
 		false,             // mandatory
@@ -244,7 +432,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 	defer cancel()
 
 	for _, topic := range tr.Topics {
-		_, err := mh.session.ExecuteWrite(ctx,
+		_, err := (*mh.session).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createTopicsQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
@@ -279,7 +467,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 
 		// associate topic to message
 		for _, ref := range topic.MessageReferences {
-			_, err = mh.session.ExecuteWrite(ctx,
+			_, err = (*mh.session).ExecuteWrite(ctx,
 				func(tx neo4j.ManagedTransaction) (any, error) {
 					createTopicsQuery := `
 						MATCH (t:Topic { topicId: $topic_id })
@@ -304,7 +492,9 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 	}
 
 	// rabbitmq
-	err = mh.rabbitChan.PublishWithContext(ctx,
+	ctx = context.Background()
+
+	err = mh.rabbitTopics.PublishWithContext(ctx,
 		"topic-created", // exchange
 		"",              // routing key
 		false,           // mandatory
@@ -337,7 +527,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 	defer cancel()
 
 	for _, tracker := range tr.Trackers {
-		_, err := mh.session.ExecuteWrite(ctx,
+		_, err := (*mh.session).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createTrackersQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
@@ -371,7 +561,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 
 			// messages
 			for _, msgRef := range match.MessageRefs {
-				_, err = mh.session.ExecuteWrite(ctx,
+				_, err = (*mh.session).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
 						createTopicsQuery := `
 							MATCH (t:Tracker { trackerId: $tracker_id })
@@ -396,7 +586,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 
 			// insights
 			for _, inRef := range match.InsightRefs {
-				_, err = mh.session.ExecuteWrite(ctx,
+				_, err = (*mh.session).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
 						createTrackerMatchQuery := `
 							MATCH (t:TrackerMatch { trackerId: $tracker_id })
@@ -422,7 +612,9 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 	}
 
 	// rabbitmq
-	err = mh.rabbitChan.PublishWithContext(ctx,
+	ctx = context.Background()
+
+	err = mh.rabbitTrackers.PublishWithContext(ctx,
 		"tracker-created", // exchange
 		"",                // routing key
 		false,             // mandatory
@@ -461,7 +653,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 		entityId := fmt.Sprintf("%s_%s_%s", entity.Type, entity.SubType, entity.Category)
 
 		// entity
-		_, err := mh.session.ExecuteWrite(ctx,
+		_, err := (*mh.session).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
 				createEntitiesQuery := `
 					MATCH (c:Conversation { conversationId: $conversation_id })
@@ -499,7 +691,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 			matchId := fmt.Sprintf("%s_%s", mh.ConversationId, entityId)
 
 			// match
-			_, err = mh.session.ExecuteWrite(ctx,
+			_, err = (*mh.session).ExecuteWrite(ctx,
 				func(tx neo4j.ManagedTransaction) (any, error) {
 					createEntitiesQuery := `
 						MATCH (e:Entity { entityId: $entityId })
@@ -529,7 +721,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 
 			// message
 			for _, msgRef := range match.MessageRefs {
-				_, err = mh.session.ExecuteWrite(ctx,
+				_, err = (*mh.session).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
 						createEntitiesQuery := `
 							MATCH (e:EntityMatch { matchId: $matchId })
@@ -556,7 +748,9 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 	}
 
 	// rabbitmq
-	err = mh.rabbitChan.PublishWithContext(ctx,
+	ctx = context.Background()
+
+	err = mh.rabbitEntity.PublishWithContext(ctx,
 		"entity-created", // exchange
 		"",               // routing key
 		false,            // mandatory
@@ -610,7 +804,7 @@ func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
 
 	// if we need to do something with them
 	// for records, message := range mr.Messages {
-	_, err = mh.session.ExecuteWrite(ctx,
+	_, err = (*mh.session).ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
 			createInsightQuery := `
 				MATCH (c:Conversation { conversationId: $conversation_id })
@@ -652,7 +846,9 @@ func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
 	}
 
 	// rabbitmq
-	err = mh.rabbitChan.PublishWithContext(ctx,
+	ctx = context.Background()
+
+	err = mh.rabbitInsight.PublishWithContext(ctx,
 		"insight-created", // exchange
 		"",                // routing key
 		false,             // mandatory

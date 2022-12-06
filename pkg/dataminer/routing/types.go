@@ -18,11 +18,11 @@ type Conversation struct {
 type MessageHandlerOptions struct {
 	ConversationId string
 
-	// neo4j session
-	Session neo4j.SessionWithContext
+	// neo4j
+	Session *neo4j.SessionWithContext
 
-	// rabbitmq
-	RabbitChan *amqp.Channel
+	// neo4j session
+	RabbitConnection *amqp.Connection
 }
 
 // MessageRouter converts messages to Symbl objects
@@ -36,8 +36,14 @@ type MessageHandler struct {
 	ConversationId string
 
 	// neo4j
-	session neo4j.SessionWithContext
+	session *neo4j.SessionWithContext
 
 	// rabbitmq
-	rabbitChan *amqp.Channel
+	rabbitConnection *amqp.Connection
+	rabbitConvo      *amqp.Channel
+	rabbitMessages   *amqp.Channel
+	rabbitTopics     *amqp.Channel
+	rabbitTrackers   *amqp.Channel
+	rabbitEntity     *amqp.Channel
+	rabbitInsight    *amqp.Channel
 }
