@@ -14,10 +14,11 @@ import (
 	"sync"
 
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
+	amqp "github.com/rabbitmq/amqp091-go"
 	klog "k8s.io/klog/v2"
 
-	instance "github.com/dvonthenen/enterprise-reference-implementation/pkg/instance"
-	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/routing"
+	instance "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/instance"
+	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/routing"
 )
 
 func New(options ServerOptions) (*Server, error) {
@@ -113,6 +114,7 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 		options := routing.MessageHandlerOptions{
 			ConversationId: conversationId,
 			Session:        session,
+			RabbitChan:     se.rabbitChan,
 		}
 		callback, err := routing.NewHandler(options)
 		if err != nil {
@@ -190,12 +192,48 @@ func (se *Server) Start() error {
 		Handler: mux,
 	}
 
+	//
+
 	// this is a blocking call
 	klog.V(2).Infof("Starting server...\n")
 	err := se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
 	if err != nil {
 		klog.V(6).Infof("ListenAndServeTLS failed. Err: %v\n", err)
 	}
+
+	return nil
+}
+
+func (se *Server) RebuildMessageBus() error {
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	if err != nil {
+		klog.V(1).Infof("amqp.Dial failed. Err: %v\n", err)
+		return err
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		return err
+	}
+
+	err = ch.ExchangeDeclare(
+		"create-conversation", // name
+		"fanout",              // type
+		true,                  // durable
+		true,                  // auto-deleted
+		false,                 // internal
+		false,                 // no-wait
+		nil,                   // arguments
+	)
+	if err != nil {
+		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
+		return err
+	}
+
+	// save to pass onto instances
+	se.rabbitChan = ch
+	se.rabbitConn = conn
 
 	return nil
 }
@@ -217,10 +255,14 @@ func (se *Server) Stop() error {
 	ctx := context.Background()
 	se.Driver.Close(ctx)
 
+	// clean up rabbitmq
+	se.rabbitConn.Close()
+	se.rabbitChan.Close()
+
 	// stop this endpoint
 	err := se.server.Close()
 	if err != nil {
-		fmt.Printf("server.Stop() failed. Err: %v\n", err)
+		fmt.Printf("server.Close() failed. Err: %v\n", err)
 	}
 
 	return nil
