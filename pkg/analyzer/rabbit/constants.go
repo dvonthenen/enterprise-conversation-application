@@ -1,15 +1,10 @@
 // Copyright 2022 Symbl.ai SDK contributors. All Rights Reserved.
 // SPDX-License-Identifier: MIT
 
-package dataminer
+package rabbit
 
 import (
 	"errors"
-)
-
-const (
-	DefaultStartPort int = 50000
-	DefaultEndPort   int = 60000
 )
 
 var (

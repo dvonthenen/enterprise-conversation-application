@@ -30,10 +30,13 @@ func (si *ServerInstance) Start() error {
 
 	go func() {
 		proxy := halfproxy.NewProxy(common.ProxyOptions{
+			UniqueID:      si.Options.ConversationId,
 			Url:           u,
 			NaturalTunnel: true,
-			Viewer:        routing.NewRouter(&si.Options.Callback),
+			Viewer:        routing.NewRouter(si.Options.Callback),
+			Manager:       *si.Options.Manager,
 		})
+		si.proxy = proxy
 
 		si.server = &http.Server{
 			Addr:    si.Options.BindAddress,
@@ -42,11 +45,18 @@ func (si *ServerInstance) Start() error {
 
 		err = si.server.ListenAndServeTLS(si.Options.CrtFile, si.Options.KeyFile)
 		if err != nil {
-			klog.V(6).Infof("ListenAndServeTLS failed. Err: %v\n", err)
+			klog.V(1).Infof("ListenAndServeTLS failed. Err: %v\n", err)
 		}
 	}()
 
 	return err
+}
+
+func (si *ServerInstance) IsConnected() bool {
+	if si.server == nil || si.server.Handler == nil {
+		return false
+	}
+	return si.proxy.IsConnected()
 }
 
 func (si *ServerInstance) Stop() error {

@@ -1,7 +1,7 @@
 // Copyright 2022 Symbl.ai SDK contributors. All Rights Reserved.
 // SPDX-License-Identifier: MIT
 
-package dataminer
+package analyzer
 
 import (
 	"flag"
