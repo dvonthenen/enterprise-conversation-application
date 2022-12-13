@@ -17,7 +17,7 @@ func New(options RabbitManagerOptions) *RabbitManager {
 	return rabbit
 }
 
-func (rm *RabbitManager) CreateSubscription(options CreateOptions) (*Subscriber, error) {
+func (rm *RabbitManager) CreateSubscription(options SubscribeOptions) (*Subscriber, error) {
 	klog.V(6).Infof("rabbit.CreateSubscription ENTER\n")
 
 	ch, err := rm.rabbitConn.Channel()
@@ -68,21 +68,19 @@ func (rm *RabbitManager) CreateSubscription(options CreateOptions) (*Subscriber,
 		return nil, err
 	}
 
-	subscribe := NewSubscribe(SubscribeOptions{
-		Name:    options.Name,
-		Channel: ch,
-		Queue:   &q,
-		Handler: options.Handler,
-	})
+	// setup subscriber
+	options.Channel = ch
+	options.Queue = &q
+	subscriber := NewSubscriber(options)
 
 	rm.mu.Lock()
-	rm.subscribers[options.Name] = subscribe
+	rm.subscribers[options.Name] = subscriber
 	rm.mu.Unlock()
 
 	klog.V(3).Infof("CreateSubscription(%s) Succeeded\n", options.Name)
 	klog.V(6).Infof("rabbit.CreateSubscription LEAVE\n")
 
-	return subscribe, nil
+	return subscriber, nil
 }
 
 func (rm *RabbitManager) Start() error {

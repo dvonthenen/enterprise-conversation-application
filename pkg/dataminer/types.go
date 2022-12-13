@@ -6,6 +6,7 @@ package dataminer
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -39,6 +40,8 @@ type Server struct {
 	instanceByPort map[int]*instance.ServerInstance
 	server         *http.Server
 	mu             sync.Mutex
+	ticker         *time.Ticker
+	stopPoll       chan struct{}
 
 	// neo4j
 	driver *neo4j.DriverWithContext

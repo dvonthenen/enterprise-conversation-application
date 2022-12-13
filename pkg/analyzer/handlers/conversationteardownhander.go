@@ -4,21 +4,23 @@
 package router
 
 import (
+	prettyjson "github.com/hokaccha/go-prettyjson"
 	klog "k8s.io/klog/v2"
 
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
-	prettyjson "github.com/hokaccha/go-prettyjson"
 )
 
-func NewConversationHandler(options HandlerOptions) *interfaces.RabbitMessageHandler {
+func NewConversationTeardownHandler(options HandlerOptions) *interfaces.RabbitMessageHandler {
 	var handler interfaces.RabbitMessageHandler
-	handler = ConversationHandler{
-		session: options.Session,
+	handler = ConversationTeardownHandler{
+		session:      options.Session,
+		symblClient:  options.SymblClient,
+		pushCallback: options.PushCallback,
 	}
 	return &handler
 }
 
-func (ch ConversationHandler) ProcessMessage(byData []byte) error {
+func (ch ConversationTeardownHandler) ProcessMessage(byData []byte) error {
 	// pretty print
 	prettyJson, err := prettyjson.Format(byData)
 	if err != nil {
@@ -26,10 +28,10 @@ func (ch ConversationHandler) ProcessMessage(byData []byte) error {
 		return err
 	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(2).Infof("ConversationHandler:\n%v\n", string(prettyJson))
+	klog.V(2).Infof("ConversationTeardownHandler:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
-	// TODO
+	// TODO: template for add your businesss logic
 
 	return nil
 }

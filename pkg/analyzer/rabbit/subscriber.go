@@ -7,7 +7,7 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
-func NewSubscribe(options SubscribeOptions) *Subscriber {
+func NewSubscriber(options SubscribeOptions) *Subscriber {
 	rabbit := &Subscriber{
 		options: options,
 		channel: options.Channel,

@@ -8,12 +8,12 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
+	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 )
 
 /*
-
- */
+	Subscriber
+*/
 type SubscribeOptions struct {
 	Name    string
 	Channel *amqp.Channel
@@ -28,14 +28,6 @@ type Subscriber struct {
 	stopChan chan struct{}
 	handler  *interfaces.RabbitMessageHandler
 	running  bool
-}
-
-/*
-	Rabbit subscriber creation options
-*/
-type CreateOptions struct {
-	Name    string
-	Handler *interfaces.RabbitMessageHandler
 }
 
 /*

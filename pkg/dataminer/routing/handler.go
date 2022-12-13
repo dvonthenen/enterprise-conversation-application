@@ -51,10 +51,10 @@ func (mh *MessageHandler) Init() error {
 	// neo4j create conversation object
 	_, err = (*mh.session).ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
-			createConversationQuery := `
-				MERGE (c:Conversation { conversationId: $conversation_id })
-				SET c = { conversationId: $conversation_id }
-				`
+			createConversationQuery := interfaces.ReplaceIndexes(`
+				MERGE (c:Conversation { #conversation_index#: $conversation_id })
+				SET c = { #conversation_index#: $conversation_id }
+				`)
 			result, err := tx.Run(ctx, createConversationQuery, map[string]any{
 				"conversation_id": mh.ConversationId,
 			})
@@ -77,9 +77,9 @@ func (mh *MessageHandler) Init() error {
 }
 
 func (mh *MessageHandler) setupRabbitChannels() error {
-	err := mh.createRabbitChannel(interfaces.RabbitExchangeConversation)
+	err := mh.createRabbitChannel(interfaces.RabbitExchangeConversationInit)
 	if err != nil {
-		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeConversation, err)
+		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeConversationInit, err)
 		return err
 	}
 	err = mh.createRabbitChannel(interfaces.RabbitExchangeMessage)
@@ -107,10 +107,14 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeInsight, err)
 		return err
 	}
+	err = mh.createRabbitChannel(interfaces.RabbitExchangeConversationTeardown)
+	if err != nil {
+		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeConversationTeardown, err)
+		return err
+	}
 	return nil
 }
 
-// TODO simplify above
 func (mh *MessageHandler) createRabbitChannel(name string) error {
 	klog.V(6).Infof("MessageHandler.createRabbitChannel ENTER\n")
 
@@ -174,6 +178,7 @@ func (mh *MessageHandler) InitializedConversation(im *sdkinterfaces.Initializati
 	data, err := json.Marshal(im)
 	if err != nil {
 		klog.V(1).Infof("json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("InitializedConversation LEAVE\n")
 		return err
 	}
 
@@ -181,6 +186,7 @@ func (mh *MessageHandler) InitializedConversation(im *sdkinterfaces.Initializati
 	prettyJson, err := prettyjson.Format(data)
 	if err != nil {
 		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("InitializedConversation LEAVE\n")
 		return err
 	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
@@ -190,18 +196,18 @@ func (mh *MessageHandler) InitializedConversation(im *sdkinterfaces.Initializati
 	// rabbitmq
 	ctx := context.Background()
 
-	channel := mh.rabbitPublish[interfaces.RabbitExchangeConversation]
+	channel := mh.rabbitPublish[interfaces.RabbitExchangeConversationInit]
 	if channel == nil {
-		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeConversation)
+		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeConversationInit)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
 		return ErrChannelNotFound
 	}
 
 	err = channel.PublishWithContext(ctx,
-		interfaces.RabbitExchangeConversation, // exchange
-		"",                                    // routing key
-		false,                                 // mandatory
-		false,                                 // immediate
+		interfaces.RabbitExchangeConversationInit, // exchange
+		"",    // routing key
+		false, // mandatory
+		false, // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        data,
@@ -254,6 +260,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 	prettyJson, err := prettyjson.Format(data)
 	if err != nil {
 		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageResponseMessage LEAVE\n")
 		return err
 	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
@@ -269,23 +276,23 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 	for _, message := range mr.Messages {
 		_, err := (*mh.session).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
-				createMessageToPeopleQuery := `
-					MATCH (c:Conversation { conversationId: $conversation_id })
-					MERGE (m:Message { messageId: $message_id })
+				createMessageToPeopleQuery := interfaces.ReplaceIndexes(`
+					MATCH (c:Conversation { #conversation_index#: $conversation_id })
+					MERGE (m:Message { #message_index#: $message_id })
 						ON CREATE SET
 							m.lastAccessed = timestamp()
 						ON MATCH SET
 							m.lastAccessed = timestamp()
-					SET m = { messageId: $message_id, content: $content, startTime: $start_time, endTime: $end_time, timeOffset: $time_offset, duration: $duration, sequenceNumber: $sequence_number, raw: $raw }
-					MERGE (u:User { userId: $user_id })
+					SET m = { #message_index#: $message_id, content: $content, startTime: $start_time, endTime: $end_time, timeOffset: $time_offset, duration: $duration, sequenceNumber: $sequence_number, raw: $raw }
+					MERGE (u:User { #user_index#: $user_id })
 						ON CREATE SET
 							u.lastAccessed = timestamp()
 						ON MATCH SET
 							u.lastAccessed = timestamp()
-					SET u = { realId: $user_real_id, userId: $user_id, name: $user_name, email: $user_id }
-					MERGE (c)-[:MESSAGES { conversationId: $conversation_id }]-(m)
-					MERGE (m)-[:SPOKE { conversationId: $conversation_id }]-(u)
-					`
+					SET u = { realId: $user_real_id, #user_index#: $user_id, name: $user_name, email: $user_id }
+					MERGE (c)-[:MESSAGES { #conversation_index#: $conversation_id }]-(m)
+					MERGE (m)-[:SPOKE { #conversation_index#: $conversation_id }]-(u)
+					`)
 				result, err := tx.Run(ctx, createMessageToPeopleQuery, map[string]any{
 					"conversation_id": mh.ConversationId,
 					"message_id":      message.ID,
@@ -397,6 +404,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 	prettyJson, err := prettyjson.Format(data)
 	if err != nil {
 		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("TopicResponseMessage LEAVE\n")
 		return err
 	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
@@ -410,25 +418,25 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 	for _, topic := range tr.Topics {
 		_, err := (*mh.session).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
-				createTopicsQuery := `
-					MATCH (c:Conversation { conversationId: $conversation_id })
-					MERGE (t:Topic { topicId: $topic_id })
+				createTopicsQuery := interfaces.ReplaceIndexes(`
+					MATCH (c:Conversation { #conversation_index#: $conversation_id })
+					MERGE (t:Topic { #topic_index#: $topic_id })
 						ON CREATE SET
 							t.lastAccessed = timestamp()
 						ON MATCH SET
 							t.lastAccessed = timestamp()
-					SET t = { topicId: $topic_id, phrases: $phrases, score: $score, type: $type, messageIndex: $message_index, rootWords: $root_words, raw: $raw }
-					MERGE (c)-[:TOPICS { conversationId: $conversation_id }]-(t)
-					`
+					SET t = { #topic_index#: $topic_id, phrases: $phrases, score: $score, type: $type, messageIndex: $symbl_message_index, rootWords: $root_words, raw: $raw }
+					MERGE (c)-[:TOPICS { #conversation_index#: $conversation_id }]-(t)
+					`)
 				result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
-					"conversation_id": mh.ConversationId,
-					"topic_id":        topic.ID,
-					"phrases":         topic.Phrases,
-					"score":           topic.Score,
-					"type":            topic.Type,
-					"message_index":   topic.MessageIndex,
-					"root_words":      ConvertRootWordToSlice(topic.RootWords),
-					"raw":             string(data),
+					"conversation_id":     mh.ConversationId,
+					"topic_id":            topic.ID,
+					"phrases":             topic.Phrases,
+					"score":               topic.Score,
+					"type":                topic.Type,
+					"symbl_message_index": topic.MessageIndex,
+					"root_words":          convertRootWordToSlice(topic.RootWords),
+					"raw":                 string(data),
 				})
 				if err != nil {
 					klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
@@ -446,11 +454,11 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 		for _, ref := range topic.MessageReferences {
 			_, err = (*mh.session).ExecuteWrite(ctx,
 				func(tx neo4j.ManagedTransaction) (any, error) {
-					createTopicsQuery := `
+					createTopicsQuery := interfaces.ReplaceIndexes(`
 						MATCH (t:Topic { topicId: $topic_id })
-						MATCH (m:Message { messageId: $message_id })
-						MERGE (t)-[:TOPIC_MESSAGE_REF { conversationId: $conversation_id }]-(m)
-						`
+						MATCH (m:Message { #message_index#: $message_id })
+						MERGE (t)-[:TOPIC_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
+						`)
 					result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
 						"conversation_id": mh.ConversationId,
 						"topic_id":        topic.ID,
@@ -526,6 +534,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 	prettyJson, err := prettyjson.Format(data)
 	if err != nil {
 		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
 		return err
 	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
@@ -539,16 +548,16 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 	for _, tracker := range tr.Trackers {
 		_, err := (*mh.session).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
-				createTrackersQuery := `
-					MATCH (c:Conversation { conversationId: $conversation_id })
-					MERGE (t:Tracker { trackerId: $tracker_id })
+				createTrackersQuery := interfaces.ReplaceIndexes(`
+					MATCH (c:Conversation { #conversation_index#: $conversation_id })
+					MERGE (t:Tracker { #tracker_index#: $tracker_id })
 						ON CREATE SET
 							t.lastAccessed = timestamp()
 						ON MATCH SET
 							t.lastAccessed = timestamp()
-					SET t = { trackerId: $tracker_id, name: $tracker_name, raw: $raw }
-					MERGE (c)-[:TRACKER { conversationId: $conversation_id }]-(t)
-					`
+					SET t = { #tracker_index#: $tracker_id, name: $tracker_name, raw: $raw }
+					MERGE (c)-[:TRACKER { #conversation_index#: $conversation_id }]-(t)
+					`)
 				result, err := tx.Run(ctx, createTrackersQuery, map[string]any{
 					"conversation_id": mh.ConversationId,
 					"tracker_id":      tracker.ID,
@@ -574,11 +583,11 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 			for _, msgRef := range match.MessageRefs {
 				_, err = (*mh.session).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
-						createTopicsQuery := `
-							MATCH (t:Tracker { trackerId: $tracker_id })
-							MATCH (m:Message { messageId: $message_id })
-							MERGE (t)-[:TRACKER_MESSAGE_REF { conversationId: $conversation_id }]-(m)
-							`
+						createTopicsQuery := interfaces.ReplaceIndexes(`
+							MATCH (t:Tracker { #tracker_index#: $tracker_id })
+							MATCH (m:Message { #message_index#: $message_id })
+							MERGE (t)-[:TRACKER_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
+							`)
 						result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
 							"conversation_id": mh.ConversationId,
 							"tracker_id":      tracker.ID,
@@ -601,11 +610,11 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 			for _, inRef := range match.InsightRefs {
 				_, err = (*mh.session).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
-						createTrackerMatchQuery := `
-							MATCH (t:TrackerMatch { trackerId: $tracker_id })
-							MATCH (i:Insight { insightId: $insight_id })
-							MERGE (t)-[:TRACKER_INSIGHT_REF { conversationId: $conversation_id }]-(i)
-							`
+						createTrackerMatchQuery := interfaces.ReplaceIndexes(`
+							MATCH (t:TrackerMatch { #tracker_index#: $tracker_id })
+							MATCH (i:Insight { #insight_index#: $insight_id })
+							MERGE (t)-[:TRACKER_INSIGHT_REF { #conversation_index#: $conversation_id }]-(i)
+							`)
 						result, err := tx.Run(ctx, createTrackerMatchQuery, map[string]any{
 							"conversation_id": mh.ConversationId,
 							"tracker_id":      tracker.ID,
@@ -683,6 +692,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 	prettyJson, err := prettyjson.Format(data)
 	if err != nil {
 		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("EntityResponseMessage LEAVE\n")
 		return err
 	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
@@ -695,25 +705,25 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 
 	for _, entity := range er.Entities {
 
-		// match id
+		// entity id
 		entityId := fmt.Sprintf("%s_%s_%s", entity.Type, entity.SubType, entity.Category)
 
 		// entity
 		_, err := (*mh.session).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
-				createEntitiesQuery := `
-					MATCH (c:Conversation { conversationId: $conversation_id })
-					MERGE (e:Entity { entityId: $entityId })
+				createEntitiesQuery := interfaces.ReplaceIndexes(`
+					MATCH (c:Conversation { #conversation_index#: $conversation_id })
+					MERGE (e:Entity { #entity_index#: $entity_id })
 						ON CREATE SET
 							e.lastAccessed = timestamp()
 						ON MATCH SET
 							e.lastAccessed = timestamp()
-					SET e = { entityId: $entityId, type: $type, subType: $sub_type, category: $category, raw: $raw }
-					MERGE (c)-[:ENTITY { conversationId: $conversation_id }]-(e)
-					`
+					SET e = { #entity_index#: $entity_id, type: $type, subType: $sub_type, category: $category, raw: $raw }
+					MERGE (c)-[:ENTITY { #conversation_index#: $conversation_id }]-(e)
+					`)
 				result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
 					"conversation_id": mh.ConversationId,
-					"entityId":        entityId,
+					"entity_id":       entityId,
 					"type":            entity.Type,
 					"sub_type":        entity.SubType,
 					"category":        entity.Category,
@@ -734,26 +744,26 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 		// associate tracker to messages and insights
 		for _, match := range entity.Matches {
 
-			// generate a unique ID
+			// generate a unique match ID
 			matchId := fmt.Sprintf("%s_%s", mh.ConversationId, entityId)
 
 			// match
 			_, err = (*mh.session).ExecuteWrite(ctx,
 				func(tx neo4j.ManagedTransaction) (any, error) {
-					createEntitiesQuery := `
-						MATCH (e:Entity { entityId: $entityId })
-						MERGE (m:EntityMatch { matchId: $matchId })
+					createEntitiesQuery := interfaces.ReplaceIndexes(`
+						MATCH (e:Entity { #entity_index#: $entity_id })
+						MERGE (m:EntityMatch { #match_index#: $match_id })
 							ON CREATE SET
 								m.lastAccessed = timestamp()
 							ON MATCH SET
 								m.lastAccessed = timestamp()
-						SET m = { matchId: $matchId, value: $value, sequenceNumber: $sequence_number }
-						MERGE (e)-[:ENTITY_MATCH_REF { conversationId: $conversation_id }]-(m)
-						`
+						SET m = { #match_index#: $match_id, value: $value, sequenceNumber: $sequence_number }
+						MERGE (e)-[:ENTITY_MATCH_REF { #conversation_index#: $conversation_id }]-(m)
+						`)
 					result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
 						"conversation_id": mh.ConversationId,
-						"entityId":        entityId,
-						"matchId":         matchId,
+						"entity_id":       entityId,
+						"match_id":        matchId,
 						"value":           match.DetectedValue,
 						"sequence_number": er.SequenceNumber,
 					})
@@ -773,14 +783,14 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 			for _, msgRef := range match.MessageRefs {
 				_, err = (*mh.session).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
-						createEntitiesQuery := `
-							MATCH (e:EntityMatch { matchId: $matchId })
-							MATCH (m:Message { messageId: $message_id })
-							MERGE (e)-[:ENTITY_MESSAGE_REF { conversationId: $conversation_id }]-(m)
-							`
+						createEntitiesQuery := interfaces.ReplaceIndexes(`
+							MATCH (e:EntityMatch { #match_index#: $match_id })
+							MATCH (m:Message { #message_index#: $message_id })
+							MERGE (e)-[:ENTITY_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
+							`)
 						result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
 							"conversation_id": mh.ConversationId,
-							"matchId":         matchId,
+							"match_id":        matchId,
 							"value":           match.DetectedValue,
 							"message_id":      msgRef.ID,
 						})
@@ -842,10 +852,64 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 	return nil
 }
 
-func (mh *MessageHandler) TeardownConversation() error {
+func (mh *MessageHandler) TeardownConversation(tm *sdkinterfaces.TeardownMessage) error {
+	klog.V(6).Infof("TeardownConversation ENTER\n")
+
+	if mh.terminationSent {
+		klog.V(1).Infof("TeardownConversation already handled\n")
+		klog.V(6).Infof("TeardownConversation LEAVE\n")
+		return nil
+	}
+
+	data, err := json.Marshal(tm)
+	if err != nil {
+		klog.V(1).Infof("json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("TeardownConversation LEAVE\n")
+		return err
+	}
+
+	// pretty print
+	prettyJson, err := prettyjson.Format(data)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("TeardownConversation LEAVE\n")
+		return err
+	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(2).Infof("TeardownConversation Called\n")
+	klog.V(2).Infof("TeardownConversation:\n%v\n\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
+
+	// rabbitmq
+	ctx := context.Background()
+
+	channel := mh.rabbitPublish[interfaces.RabbitExchangeConversationTeardown]
+	if channel == nil {
+		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeConversationTeardown)
+		klog.V(6).Infof("TeardownConversation LEAVE\n")
+		return ErrChannelNotFound
+	}
+
+	err = channel.PublishWithContext(ctx,
+		interfaces.RabbitExchangeConversationTeardown, // exchange
+		"",    // routing key
+		false, // mandatory
+		false, // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        data,
+		})
+	if err != nil {
+		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("TeardownConversation LEAVE\n")
+		return err
+	}
+
+	// mark as teardown message sent
+	mh.terminationSent = true
+
+	klog.V(3).Infof("TeardownConversation Succeeded\n")
+	klog.V(6).Infof("TeardownConversation LEAVE\n")
+
 	return nil
 }
 
@@ -882,6 +946,7 @@ func (mh *MessageHandler) handleInsight(insight *sdkinterfaces.Insight, squenceN
 	prettyJson, err := prettyjson.Format(data)
 	if err != nil {
 		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("handleInsight LEAVE\n")
 		return err
 	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
@@ -896,23 +961,23 @@ func (mh *MessageHandler) handleInsight(insight *sdkinterfaces.Insight, squenceN
 	// for records, message := range mr.Messages {
 	_, err = (*mh.session).ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
-			createInsightQuery := `
-				MATCH (c:Conversation { conversationId: $conversation_id })
-				MERGE (i:Insight { insightId: $insight_id })
+			createInsightQuery := interfaces.ReplaceIndexes(`
+				MATCH (c:Conversation { #conversation_index#: $conversation_id })
+				MERGE (i:Insight { #insight_index#: $insight_id })
 					ON CREATE SET
 						i.lastAccessed = timestamp()
 					ON MATCH SET
 						i.lastAccessed = timestamp()
-				SET i = { insightId: $insight_id, type: $type, content: $content, sequenceNumber: $sequence_number, assigneeId: $assignee_id, userId: $user_id, raw: $raw }
-				MERGE (u:User { userId: $user_id })
+				SET i = { #insight_index#: $insight_id, type: $type, content: $content, sequenceNumber: $sequence_number, assigneeId: $assignee_id, raw: $raw }
+				MERGE (u:User { #user_index#: $user_id })
 					ON CREATE SET
 						u.lastAccessed = timestamp()
 					ON MATCH SET
 						u.lastAccessed = timestamp()
-				SET u = { realId: $user_real_id, userId: $user_id, name: $user_name, email: $user_id }
-				MERGE (c)-[:INSIGHT { conversationId: $conversation_id }]-(i)
-				MERGE (i)-[:SPOKE { conversationId: $conversation_id }]-(u)
-				`
+				SET u = { realId: $user_real_id, #user_index#: $user_id, name: $user_name, email: $user_id }
+				MERGE (c)-[:INSIGHT { #conversation_index#: $conversation_id }]-(i)
+				MERGE (i)-[:SPOKE { #conversation_index#: $conversation_id }]-(u)
+				`)
 			result, err := tx.Run(ctx, createInsightQuery, map[string]any{
 				"conversation_id": mh.ConversationId,
 				"insight_id":      insight.ID,
@@ -980,7 +1045,7 @@ func (mh *MessageHandler) handleInsight(insight *sdkinterfaces.Insight, squenceN
 	return nil
 }
 
-func ConvertRootWordToSlice(words []sdkinterfaces.RootWord) []string {
+func convertRootWordToSlice(words []sdkinterfaces.RootWord) []string {
 	var arr []string
 	for _, word := range words {
 		arr = append(arr, word.Text)

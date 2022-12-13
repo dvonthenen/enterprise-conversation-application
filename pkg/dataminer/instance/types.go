@@ -25,6 +25,7 @@ type InstanceOptions struct {
 type ServerInstance struct {
 	Options InstanceOptions
 
+	// housekeeping
 	proxy  *halfproxy.HalfDuplexWebsocketProxy
 	server *http.Server
 }
