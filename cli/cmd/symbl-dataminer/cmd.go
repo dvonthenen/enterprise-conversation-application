@@ -19,7 +19,7 @@ func main() {
 
 	// init
 	dataminer.Init(dataminer.EnterpriseInit{
-		LogLevel: dataminer.LogLevelFull,
+		LogLevel: dataminer.LogLevelStandard,
 	})
 
 	dataminer, err := dataminer.New(dataminer.ServerOptions{
@@ -32,13 +32,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// start... blocking call
-	go func() {
-		err := dataminer.Start()
-		if err != nil {
-			fmt.Printf("dataminer.Start() failed. Err: %v\n", err)
-		}
-	}()
+	// start
+	err = dataminer.Start()
+	if err != nil {
+		fmt.Printf("dataminer.Start() failed. Err: %v\n", err)
+	}
 
 	fmt.Print("Press ENTER to exit!\n\n")
 	input := bufio.NewScanner(os.Stdin)

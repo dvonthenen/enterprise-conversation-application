@@ -7,13 +7,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 
-	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	sdkinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	prettyjson "github.com/hokaccha/go-prettyjson"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	amqp "github.com/rabbitmq/amqp091-go"
 	klog "k8s.io/klog/v2"
+
+	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
 )
 
 func NewHandler(options MessageHandlerOptions) (*MessageHandler, error) {
@@ -23,10 +25,10 @@ func NewHandler(options MessageHandlerOptions) (*MessageHandler, error) {
 	}
 
 	mh := &MessageHandler{
-
 		ConversationId:   options.ConversationId,
 		session:          options.Session,
 		rabbitConnection: options.RabbitConnection,
+		rabbitPublish:    make(map[string]*amqp.Channel),
 	}
 	return mh, nil
 }
@@ -35,27 +37,19 @@ func (mh *MessageHandler) Init() error {
 	klog.V(6).Infof("MessageHandler.Init ENTER\n")
 
 	// init all rabbit channels
-	var rabbitErr error
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		// signal done
-		defer wg.Done()
-
-		err := mh.setupRabbitChannels()
-		if err != nil {
-			klog.V(1).Infof("setupRabbitChannels failed. Err: %v\n", err)
-		}
-		rabbitErr = err
-	}()
+	err := mh.setupRabbitChannels()
+	if err != nil {
+		klog.V(1).Infof("setupRabbitChannels failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
+		return err
+	}
 
 	// context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// neo4j create conversation object
-	_, err := (*mh.session).ExecuteWrite(ctx,
+	_, err = (*mh.session).ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
 			createConversationQuery := `
 				MERGE (c:Conversation { conversationId: $conversation_id })
@@ -76,245 +70,194 @@ func (mh *MessageHandler) Init() error {
 		return err
 	}
 
-	// wait for everyone to finish
-	wg.Wait()
-
-	if rabbitErr != nil {
-		klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", rabbitErr)
-		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
-		return rabbitErr
-	}
-
-	klog.V(4).Infof("Init Succeeded\n")
+	klog.V(2).Infof("MessageHandler.Init Succeeded\n")
 	klog.V(6).Infof("MessageHandler.Init LEAVE\n")
 
 	return nil
 }
 
 func (mh *MessageHandler) setupRabbitChannels() error {
-	// convo
+	err := mh.createRabbitChannel(interfaces.RabbitExchangeConversation)
+	if err != nil {
+		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeConversation, err)
+		return err
+	}
+	err = mh.createRabbitChannel(interfaces.RabbitExchangeMessage)
+	if err != nil {
+		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeMessage, err)
+		return err
+	}
+	err = mh.createRabbitChannel(interfaces.RabbitExchangeTopic)
+	if err != nil {
+		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeTopic, err)
+		return err
+	}
+	err = mh.createRabbitChannel(interfaces.RabbitExchangeTracker)
+	if err != nil {
+		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeTracker, err)
+		return err
+	}
+	err = mh.createRabbitChannel(interfaces.RabbitExchangeEntity)
+	if err != nil {
+		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeEntity, err)
+		return err
+	}
+	err = mh.createRabbitChannel(interfaces.RabbitExchangeInsight)
+	if err != nil {
+		klog.V(1).Infof("createRabbitChannel(%s) failed. Err: %v\n", interfaces.RabbitExchangeInsight, err)
+		return err
+	}
+	return nil
+}
+
+// TODO simplify above
+func (mh *MessageHandler) createRabbitChannel(name string) error {
+	klog.V(6).Infof("MessageHandler.createRabbitChannel ENTER\n")
+
+	if mh.rabbitPublish == nil {
+		klog.V(1).Infof("rabbitPublish is nil\n")
+		klog.V(6).Infof("MessageHandler.createRabbitChannel LEAVE\n")
+		return ErrInvalidInput
+	}
+
 	ch, err := mh.rabbitConnection.Channel()
 	if err != nil {
 		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageHandler.createRabbitChannel LEAVE\n")
 		return err
 	}
 	err = ch.ExchangeDeclare(
-		"create-conversation", // name
-		"fanout",              // type
-		true,                  // durable
-		true,                  // auto-deleted
-		false,                 // internal
-		false,                 // no-wait
-		nil,                   // arguments
+		name,     // name
+		"fanout", // type
+		true,     // durable
+		true,     // auto-deleted
+		false,    // internal
+		false,    // no-wait
+		nil,      // arguments
 	)
 	if err != nil {
 		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
-		return err
-	}
-	mh.rabbitConvo = ch
-
-	// messages
-	ch, err = mh.rabbitConnection.Channel()
-	if err != nil {
-		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
-		return err
-	}
-	err = ch.ExchangeDeclare(
-		"create-message", // name
-		"fanout",         // type
-		true,             // durable
-		true,             // auto-deleted
-		false,            // internal
-		false,            // no-wait
-		nil,              // arguments
-	)
-	if err != nil {
-		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
-		return err
-	}
-	mh.rabbitMessages = ch
-
-	// topics
-	ch, err = mh.rabbitConnection.Channel()
-	if err != nil {
-		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
-		return err
-	}
-	err = ch.ExchangeDeclare(
-		"create-topic", // name
-		"fanout",       // type
-		true,           // durable
-		true,           // auto-deleted
-		false,          // internal
-		false,          // no-wait
-		nil,            // arguments
-	)
-	if err != nil {
-		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
-		return err
-	}
-	mh.rabbitTopics = ch
-
-	// tracker
-	ch, err = mh.rabbitConnection.Channel()
-	if err != nil {
-		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
-		return err
-	}
-	err = ch.ExchangeDeclare(
-		"create-tracker", // name
-		"fanout",         // type
-		true,             // durable
-		true,             // auto-deleted
-		false,            // internal
-		false,            // no-wait
-		nil,              // arguments
-	)
-	if err != nil {
-		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
-		return err
-	}
-	mh.rabbitTrackers = ch
-
-	// entity
-	ch, err = mh.rabbitConnection.Channel()
-	if err != nil {
-		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
-		return err
-	}
-	err = ch.ExchangeDeclare(
-		"create-entity", // name
-		"fanout",        // type
-		true,            // durable
-		true,            // auto-deleted
-		false,           // internal
-		false,           // no-wait
-		nil,             // arguments
-	)
-	if err != nil {
-		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
-		return err
-	}
-	mh.rabbitEntity = ch
-
-	// insight
-	ch, err = mh.rabbitConnection.Channel()
-	if err != nil {
-		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
-		return err
-	}
-	err = ch.ExchangeDeclare(
-		"create-insight", // name
-		"fanout",         // type
-		true,             // durable
-		true,             // auto-deleted
-		false,            // internal
-		false,            // no-wait
-		nil,              // arguments
-	)
-	if err != nil {
-		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
-		return err
-	}
-	mh.rabbitInsight = ch
-
-	// rabbitmq
-	ctx := context.Background()
-
-	convo := &Conversation{
-		ConversationId: mh.ConversationId,
-	}
-
-	data, err := json.Marshal(convo)
-	if err != nil {
-		klog.V(1).Infof("RecognitionResult json.Marshal failed. Err: %v\n", err)
-		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
+		klog.V(6).Infof("MessageHandler.createRabbitChannel LEAVE\n")
 		return err
 	}
 
-	err = mh.rabbitConvo.PublishWithContext(ctx,
-		"conversation-created", // exchange
-		"",                     // routing key
-		false,                  // mandatory
-		false,                  // immediate
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        data,
-		})
-	if err != nil {
-		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
-		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
-		return err
-	}
+	// save the channel
+	mh.rabbitPublish[name] = ch
 
+	klog.V(4).Infof("createRabbitChannel Succeeded\n")
+	klog.V(6).Infof("MessageHandler.createRabbitChannel LEAVE\n")
 	return nil
 }
 
 func (mh *MessageHandler) Teardown() error {
 	klog.V(6).Infof("MessageHandler.Teardown ENTER\n")
 
-	// close the session
+	// close the neo4j session
 	ctx := context.Background()
 	(*mh.session).Close(ctx)
 
-	// close channels
-	if mh.rabbitConvo != nil {
-		mh.rabbitConvo.Close()
-		mh.rabbitConvo = nil
+	// close the rabbit channels
+	for _, channel := range mh.rabbitPublish {
+		channel.Close()
 	}
-	if mh.rabbitMessages != nil {
-		mh.rabbitMessages.Close()
-		mh.rabbitMessages = nil
-	}
-	if mh.rabbitTopics != nil {
-		mh.rabbitTopics.Close()
-		mh.rabbitTopics = nil
-	}
-	if mh.rabbitTrackers != nil {
-		mh.rabbitTrackers.Close()
-		mh.rabbitTrackers = nil
-	}
-	if mh.rabbitEntity != nil {
-		mh.rabbitEntity.Close()
-		mh.rabbitEntity = nil
-	}
-	if mh.rabbitInsight != nil {
-		mh.rabbitInsight.Close()
-		mh.rabbitInsight = nil
-	}
+	mh.rabbitPublish = make(map[string]*amqp.Channel)
 
-	klog.V(4).Infof("Teardown Succeeded\n")
+	klog.V(2).Infof("MessageHandler.Teardown Succeeded\n")
 	klog.V(6).Infof("MessageHandler.Teardown LEAVE\n")
 
 	return nil
 }
 
-func (mh *MessageHandler) RecognitionResultMessage(rr *interfaces.RecognitionResult) error {
-	data, err := json.Marshal(rr)
+func (mh *MessageHandler) InitializedConversation(im *sdkinterfaces.InitializationMessage) error {
+	klog.V(6).Infof("InitializedConversation ENTER\n")
+
+	data, err := json.Marshal(im)
+	if err != nil {
+		klog.V(1).Infof("json.Marshal failed. Err: %v\n", err)
+		return err
+	}
+
+	// pretty print
+	prettyJson, err := prettyjson.Format(data)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		return err
+	}
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(2).Infof("InitializationMessage:\n%v\n\n", string(prettyJson))
+	klog.V(6).Infof("-------------------------------\n\n")
+
+	// rabbitmq
+	ctx := context.Background()
+
+	channel := mh.rabbitPublish[interfaces.RabbitExchangeConversation]
+	if channel == nil {
+		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeConversation)
+		klog.V(6).Infof("InitializedConversation LEAVE\n")
+		return ErrChannelNotFound
+	}
+
+	err = channel.PublishWithContext(ctx,
+		interfaces.RabbitExchangeConversation, // exchange
+		"",                                    // routing key
+		false,                                 // mandatory
+		false,                                 // immediate
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        data,
+		})
+	if err != nil {
+		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("InitializedConversation LEAVE\n")
+		return err
+	}
+
+	klog.V(3).Infof("InitializedConversation Succeeded\n")
+	klog.V(6).Infof("InitializedConversation LEAVE\n")
+
+	return nil
+}
+
+func (mh *MessageHandler) RecognitionResultMessage(rr *sdkinterfaces.RecognitionResult) error {
+	klog.V(6).Infof("RecognitionResultMessage ENTER\n")
+
+	prettyJson, err := prettyjson.Marshal(rr)
 	if err != nil {
 		klog.V(1).Infof("RecognitionResult json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("RecognitionResultMessage LEAVE\n")
 		return err
 	}
 
 	// We probably don't actually need this. Will just leave the debug statements here for future use
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(6).Infof("RecognitionResultMessage:\n%v\n\n", string(data))
+	klog.V(6).Infof("RecognitionResultMessage:\n%v\n\n", string(prettyJson))
 	klog.V(6).Infof("\nMessage:\n%v\n\n", rr.Message.Punctuated.Transcript)
 	klog.V(6).Infof("-------------------------------\n\n")
+
+	klog.V(4).Infof("RecognitionResultMessage Succeeded\n")
+	klog.V(6).Infof("RecognitionResultMessage LEAVE\n")
 
 	return nil
 }
 
-func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse) error {
+func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageResponse) error {
+	klog.V(6).Infof("MessageResponseMessage ENTER\n")
+
 	data, err := json.Marshal(mr)
 	if err != nil {
 		klog.V(1).Infof("MessageResponse json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageResponseMessage LEAVE\n")
 		return err
 	}
 
-	// TODO: fix level
+	// pretty print
+	prettyJson, err := prettyjson.Format(data)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		return err
+	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(4).Infof("MessageResponseMessage:\n%v\n", string(data))
+	klog.V(2).Infof("MessageResponseMessage:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
@@ -333,7 +276,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 							m.lastAccessed = timestamp()
 						ON MATCH SET
 							m.lastAccessed = timestamp()
-					SET m = { messageId: $message_id, content: $content, startTime: $start_time, endTime: $end_time, timeOffset: $time_offset, duration: $duration, raw: $raw }
+					SET m = { messageId: $message_id, content: $content, startTime: $start_time, endTime: $end_time, timeOffset: $time_offset, duration: $duration, sequenceNumber: $sequence_number, raw: $raw }
 					MERGE (u:User { userId: $user_id })
 						ON CREATE SET
 							u.lastAccessed = timestamp()
@@ -351,6 +294,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 					"end_time":        message.Duration.EndTime,
 					"time_offset":     message.Duration.TimeOffset,
 					"duration":        message.Duration.Duration,
+					"sequence_number": mr.SequenceNumber,
 					"user_real_id":    message.From.ID,
 					"user_name":       message.From.Name,
 					"user_id":         message.From.UserID,
@@ -364,6 +308,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 			})
 		if err != nil {
 			klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+			klog.V(6).Infof("MessageResponseMessage LEAVE\n")
 			return err
 		}
 	}
@@ -371,32 +316,55 @@ func (mh *MessageHandler) MessageResponseMessage(mr *interfaces.MessageResponse)
 	// rabbitmq
 	ctx = context.Background()
 
-	err = mh.rabbitMessages.PublishWithContext(ctx,
-		"message-created", // exchange
-		"",                // routing key
-		false,             // mandatory
-		false,             // immediate
+	wrapperStruct := interfaces.MessageResponse{
+		ConversationID:  mh.ConversationId,
+		MessageResponse: mr,
+	}
+
+	data, err = json.Marshal(wrapperStruct)
+	if err != nil {
+		klog.V(1).Infof("MessageResponse json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageResponseMessage LEAVE\n")
+		return err
+	}
+
+	channel := mh.rabbitPublish[interfaces.RabbitExchangeMessage]
+	if channel == nil {
+		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeMessage)
+		klog.V(6).Infof("MessageResponseMessage LEAVE\n")
+		return ErrChannelNotFound
+	}
+
+	err = channel.PublishWithContext(ctx,
+		interfaces.RabbitExchangeMessage, // exchange
+		"",                               // routing key
+		false,                            // mandatory
+		false,                            // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        data,
 		})
 	if err != nil {
-		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageResponseMessage LEAVE\n")
 		return err
 	}
+
+	klog.V(3).Infof("MessageResponseMessage Succeeded\n")
+	klog.V(6).Infof("MessageResponseMessage LEAVE\n")
 
 	return nil
 }
 
-func (mh *MessageHandler) InsightResponseMessage(ir *interfaces.InsightResponse) error {
+func (mh *MessageHandler) InsightResponseMessage(ir *sdkinterfaces.InsightResponse) error {
 	for _, insight := range ir.Insights {
 		switch insight.Type {
-		case interfaces.InsightTypeQuestion:
-			return mh.HandleQuestion(&insight)
-		case interfaces.InsightTypeFollowUp:
-			return mh.HandleFollowUp(&insight)
-		case interfaces.InsightTypeActionItem:
-			return mh.HandleActionItem(&insight)
+		case sdkinterfaces.InsightTypeQuestion:
+			return mh.HandleQuestion(&insight, ir.SequenceNumber)
+		case sdkinterfaces.InsightTypeFollowUp:
+			return mh.HandleFollowUp(&insight, ir.SequenceNumber)
+		case sdkinterfaces.InsightTypeActionItem:
+			return mh.HandleActionItem(&insight, ir.SequenceNumber)
 		default:
 			data, err := json.Marshal(ir)
 			if err != nil {
@@ -415,16 +383,24 @@ func (mh *MessageHandler) InsightResponseMessage(ir *interfaces.InsightResponse)
 	return nil
 }
 
-func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) error {
+func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) error {
+	klog.V(6).Infof("TopicResponseMessage ENTER\n")
+
 	data, err := json.Marshal(tr)
 	if err != nil {
 		klog.V(1).Infof("TopicResponseMessage json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("TopicResponseMessage LEAVE\n")
 		return err
 	}
 
-	// TODO: fix level
+	// pretty print
+	prettyJson, err := prettyjson.Format(data)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		return err
+	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(4).Infof("TopicResponseMessage:\n%v\n", string(data))
+	klog.V(2).Infof("TopicResponseMessage:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
@@ -462,6 +438,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 			})
 		if err != nil {
 			klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+			klog.V(6).Infof("TopicResponseMessage LEAVE\n")
 			return err
 		}
 
@@ -475,8 +452,9 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 						MERGE (t)-[:TOPIC_MESSAGE_REF { conversationId: $conversation_id }]-(m)
 						`
 					result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
-						"topic_id":   topic.ID,
-						"message_id": ref.ID,
+						"conversation_id": mh.ConversationId,
+						"topic_id":        topic.ID,
+						"message_id":      ref.ID,
 					})
 					if err != nil {
 						klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
@@ -486,6 +464,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 				})
 			if err != nil {
 				klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+				klog.V(6).Infof("TopicResponseMessage LEAVE\n")
 				return err
 			}
 		}
@@ -494,32 +473,63 @@ func (mh *MessageHandler) TopicResponseMessage(tr *interfaces.TopicResponse) err
 	// rabbitmq
 	ctx = context.Background()
 
-	err = mh.rabbitTopics.PublishWithContext(ctx,
-		"topic-created", // exchange
-		"",              // routing key
-		false,           // mandatory
-		false,           // immediate
+	wrapperStruct := interfaces.TopicResponse{
+		ConversationID: mh.ConversationId,
+		TopicResponse:  tr,
+	}
+
+	data, err = json.Marshal(wrapperStruct)
+	if err != nil {
+		klog.V(1).Infof("TopicResponse json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("TopicResponseMessage LEAVE\n")
+		return err
+	}
+
+	channel := mh.rabbitPublish[interfaces.RabbitExchangeTopic]
+	if channel == nil {
+		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeTopic)
+		klog.V(6).Infof("TopicResponseMessage LEAVE\n")
+		return ErrChannelNotFound
+	}
+
+	err = channel.PublishWithContext(ctx,
+		interfaces.RabbitExchangeTopic, // exchange
+		"",                             // routing key
+		false,                          // mandatory
+		false,                          // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        data,
 		})
 	if err != nil {
-		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("TopicResponseMessage LEAVE\n")
 		return err
 	}
+
+	klog.V(3).Infof("TopicResponseMessage Succeeded\n")
+	klog.V(6).Infof("TopicResponseMessage LEAVE\n")
 
 	return nil
 }
-func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse) error {
+func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerResponse) error {
+	klog.V(6).Infof("TrackerResponseMessage ENTER\n")
+
 	data, err := json.Marshal(tr)
 	if err != nil {
 		klog.V(1).Infof("TrackerResponseMessage json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
 		return err
 	}
 
-	// TODO: fix level
+	// pretty print
+	prettyJson, err := prettyjson.Format(data)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		return err
+	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(4).Infof("TrackerResponseMessage:\n%v\n", string(data))
+	klog.V(2).Infof("TrackerResponseMessage:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
@@ -553,6 +563,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 			})
 		if err != nil {
 			klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+			klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
 			return err
 		}
 
@@ -569,8 +580,9 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 							MERGE (t)-[:TRACKER_MESSAGE_REF { conversationId: $conversation_id }]-(m)
 							`
 						result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
-							"tracker_id": tracker.ID,
-							"message_id": msgRef.ID,
+							"conversation_id": mh.ConversationId,
+							"tracker_id":      tracker.ID,
+							"message_id":      msgRef.ID,
 						})
 						if err != nil {
 							klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
@@ -580,6 +592,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 					})
 				if err != nil {
 					klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+					klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
 					return err
 				}
 			}
@@ -594,8 +607,9 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 							MERGE (t)-[:TRACKER_INSIGHT_REF { conversationId: $conversation_id }]-(i)
 							`
 						result, err := tx.Run(ctx, createTrackerMatchQuery, map[string]any{
-							"tracker_id": tracker.ID,
-							"insight_id": inRef.ID,
+							"conversation_id": mh.ConversationId,
+							"tracker_id":      tracker.ID,
+							"insight_id":      inRef.ID,
 						})
 						if err != nil {
 							klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
@@ -605,6 +619,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 					})
 				if err != nil {
 					klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+					klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
 					return err
 				}
 			}
@@ -614,33 +629,64 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *interfaces.TrackerResponse)
 	// rabbitmq
 	ctx = context.Background()
 
-	err = mh.rabbitTrackers.PublishWithContext(ctx,
-		"tracker-created", // exchange
-		"",                // routing key
-		false,             // mandatory
-		false,             // immediate
+	wrapperStruct := interfaces.TrackerResponse{
+		ConversationID:  mh.ConversationId,
+		TrackerResponse: tr,
+	}
+
+	data, err = json.Marshal(wrapperStruct)
+	if err != nil {
+		klog.V(1).Infof("TrackerResponse json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
+		return err
+	}
+
+	channel := mh.rabbitPublish[interfaces.RabbitExchangeTracker]
+	if channel == nil {
+		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeTracker)
+		klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
+		return ErrChannelNotFound
+	}
+
+	err = channel.PublishWithContext(ctx,
+		interfaces.RabbitExchangeTracker, // exchange
+		"",                               // routing key
+		false,                            // mandatory
+		false,                            // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        data,
 		})
 	if err != nil {
-		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
 		return err
 	}
+
+	klog.V(3).Infof("TrackerResponseMessage Succeeded\n")
+	klog.V(6).Infof("TrackerResponseMessage LEAVE\n")
 
 	return nil
 }
 
-func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) error {
+func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse) error {
+	klog.V(6).Infof("EntityResponseMessage ENTER\n")
+
 	data, err := json.Marshal(er)
 	if err != nil {
 		klog.V(1).Infof("EntityResponseMessage json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("EntityResponseMessage LEAVE\n")
 		return err
 	}
 
-	// TODO: fix level
+	// pretty print
+	prettyJson, err := prettyjson.Format(data)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		return err
+	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(4).Infof("EntityResponseMessage:\n%v\n", string(data))
+	klog.V(2).Infof("EntityResponseMessage:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
@@ -681,6 +727,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 			})
 		if err != nil {
 			klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+			klog.V(6).Infof("EntityResponseMessage LEAVE\n")
 			return err
 		}
 
@@ -700,13 +747,15 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 								m.lastAccessed = timestamp()
 							ON MATCH SET
 								m.lastAccessed = timestamp()
-						SET m = { matchId: $matchId, value: $value }
+						SET m = { matchId: $matchId, value: $value, sequenceNumber: $sequence_number }
 						MERGE (e)-[:ENTITY_MATCH_REF { conversationId: $conversation_id }]-(m)
 						`
 					result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
-						"entityId": entityId,
-						"matchId":  matchId,
-						"value":    match.DetectedValue,
+						"conversation_id": mh.ConversationId,
+						"entityId":        entityId,
+						"matchId":         matchId,
+						"value":           match.DetectedValue,
+						"sequence_number": er.SequenceNumber,
 					})
 					if err != nil {
 						klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
@@ -716,6 +765,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 				})
 			if err != nil {
 				klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+				klog.V(6).Infof("EntityResponseMessage LEAVE\n")
 				return err
 			}
 
@@ -729,9 +779,10 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 							MERGE (e)-[:ENTITY_MESSAGE_REF { conversationId: $conversation_id }]-(m)
 							`
 						result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
-							"matchId":    matchId,
-							"value":      match.DetectedValue,
-							"message_id": msgRef.ID,
+							"conversation_id": mh.ConversationId,
+							"matchId":         matchId,
+							"value":           match.DetectedValue,
+							"message_id":      msgRef.ID,
 						})
 						if err != nil {
 							klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
@@ -741,6 +792,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 					})
 				if err != nil {
 					klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+					klog.V(6).Infof("EntityResponseMessage LEAVE\n")
 					return err
 				}
 			}
@@ -750,20 +802,50 @@ func (mh *MessageHandler) EntityResponseMessage(er *interfaces.EntityResponse) e
 	// rabbitmq
 	ctx = context.Background()
 
-	err = mh.rabbitEntity.PublishWithContext(ctx,
-		"entity-created", // exchange
-		"",               // routing key
-		false,            // mandatory
-		false,            // immediate
+	wrapperStruct := interfaces.EntityResponse{
+		ConversationID: mh.ConversationId,
+		EntityResponse: er,
+	}
+
+	data, err = json.Marshal(wrapperStruct)
+	if err != nil {
+		klog.V(1).Infof("EntityResponse json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("EntityResponseMessage LEAVE\n")
+		return err
+	}
+
+	channel := mh.rabbitPublish[interfaces.RabbitExchangeEntity]
+	if channel == nil {
+		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeEntity)
+		klog.V(6).Infof("EntityResponseMessage LEAVE\n")
+		return ErrChannelNotFound
+	}
+
+	err = channel.PublishWithContext(ctx,
+		interfaces.RabbitExchangeEntity, // exchange
+		"",                              // routing key
+		false,                           // mandatory
+		false,                           // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        data,
 		})
 	if err != nil {
-		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("EntityResponseMessage LEAVE\n")
 		return err
 	}
 
+	klog.V(3).Infof("EntityResponseMessage Succeeded\n")
+	klog.V(6).Infof("EntityResponseMessage LEAVE\n")
+
+	return nil
+}
+
+func (mh *MessageHandler) TeardownConversation() error {
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(2).Infof("TeardownConversation Called\n")
+	klog.V(6).Infof("-------------------------------\n\n")
 	return nil
 }
 
@@ -774,28 +856,36 @@ func (mh *MessageHandler) UnhandledMessage(byMsg []byte) error {
 	return nil
 }
 
-func (mh *MessageHandler) HandleQuestion(insight *interfaces.Insight) error {
-	return mh.handleInsight(insight)
+func (mh *MessageHandler) HandleQuestion(insight *sdkinterfaces.Insight, number int) error {
+	return mh.handleInsight(insight, number)
 }
 
-func (mh *MessageHandler) HandleActionItem(insight *interfaces.Insight) error {
-	return mh.handleInsight(insight)
+func (mh *MessageHandler) HandleActionItem(insight *sdkinterfaces.Insight, number int) error {
+	return mh.handleInsight(insight, number)
 }
 
-func (mh *MessageHandler) HandleFollowUp(insight *interfaces.Insight) error {
-	return mh.handleInsight(insight)
+func (mh *MessageHandler) HandleFollowUp(insight *sdkinterfaces.Insight, number int) error {
+	return mh.handleInsight(insight, number)
 }
 
-func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
+func (mh *MessageHandler) handleInsight(insight *sdkinterfaces.Insight, squenceNumber int) error {
+	klog.V(6).Infof("handleInsight ENTER\n")
+
 	data, err := json.Marshal(insight)
 	if err != nil {
 		klog.V(1).Infof("handleInsight json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("handleInsight LEAVE\n")
 		return err
 	}
 
-	// TODO: fix level
+	// pretty print
+	prettyJson, err := prettyjson.Format(data)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		return err
+	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(4).Infof("handleInsight:\n%v\n", string(data))
+	klog.V(2).Infof("handleInsight:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// write the object to the database
@@ -813,7 +903,7 @@ func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
 						i.lastAccessed = timestamp()
 					ON MATCH SET
 						i.lastAccessed = timestamp()
-				SET i = { insightId: $insight_id, type: $type, content: $content, assigneeId: $assignee_id, userId: $user_id, raw: $raw }
+				SET i = { insightId: $insight_id, type: $type, content: $content, sequenceNumber: $sequence_number, assigneeId: $assignee_id, userId: $user_id, raw: $raw }
 				MERGE (u:User { userId: $user_id })
 					ON CREATE SET
 						u.lastAccessed = timestamp()
@@ -828,6 +918,7 @@ func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
 				"insight_id":      insight.ID,
 				"type":            insight.Type,
 				"content":         insight.Payload.Content,
+				"sequence_number": squenceNumber,
 				"assignee_id":     insight.Assignee.UserID,
 				"user_real_id":    insight.From.ID,
 				"user_id":         insight.From.UserID,
@@ -842,30 +933,54 @@ func (mh *MessageHandler) handleInsight(insight *interfaces.Insight) error {
 		})
 	if err != nil {
 		klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+		klog.V(6).Infof("handleInsight LEAVE\n")
 		return err
 	}
 
 	// rabbitmq
 	ctx = context.Background()
 
-	err = mh.rabbitInsight.PublishWithContext(ctx,
-		"insight-created", // exchange
-		"",                // routing key
-		false,             // mandatory
-		false,             // immediate
+	wrapperStruct := interfaces.InsightResponse{
+		ConversationID: mh.ConversationId,
+		Insight:        insight,
+	}
+
+	data, err = json.Marshal(wrapperStruct)
+	if err != nil {
+		klog.V(1).Infof("InsightResponse json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("handleInsight LEAVE\n")
+		return err
+	}
+
+	channel := mh.rabbitPublish[interfaces.RabbitExchangeInsight]
+	if channel == nil {
+		klog.V(1).Infof("mh.rabbitPublish(%s) is nil\n", interfaces.RabbitExchangeInsight)
+		klog.V(6).Infof("handleInsight LEAVE\n")
+		return ErrChannelNotFound
+	}
+
+	err = channel.PublishWithContext(ctx,
+		interfaces.RabbitExchangeInsight, // exchange
+		"",                               // routing key
+		false,                            // mandatory
+		false,                            // immediate
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        data,
 		})
 	if err != nil {
-		fmt.Printf("PublishWithContext failed. Err: %v\n", err)
+		klog.V(1).Infof("PublishWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("handleInsight LEAVE\n")
 		return err
 	}
+
+	klog.V(3).Infof("handleInsight Succeeded\n")
+	klog.V(6).Infof("handleInsight LEAVE\n")
 
 	return nil
 }
 
-func ConvertRootWordToSlice(words []interfaces.RootWord) []string {
+func ConvertRootWordToSlice(words []sdkinterfaces.RootWord) []string {
 	var arr []string
 	for _, word := range words {
 		arr = append(arr, word.Text)

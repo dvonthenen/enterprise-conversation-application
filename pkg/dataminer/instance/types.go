@@ -6,7 +6,9 @@ package instance
 import (
 	"net/http"
 
-	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
+	wsinterfaces "github.com/koding/websocketproxy/pkg/interfaces"
 )
 
 type InstanceOptions struct {
@@ -16,11 +18,13 @@ type InstanceOptions struct {
 	BindAddress     string
 	RedirectAddress string
 	Port            int
-	Callback        interfaces.InsightCallback
+	Callback        *symblinterfaces.InsightCallback
+	Manager         *wsinterfaces.ManageCallback
 }
 
 type ServerInstance struct {
 	Options InstanceOptions
 
+	proxy  *halfproxy.HalfDuplexWebsocketProxy
 	server *http.Server
 }

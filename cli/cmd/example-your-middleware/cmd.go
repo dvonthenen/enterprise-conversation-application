@@ -9,7 +9,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/dvonthenen/enterprise-reference-implementation/pkg/server"
+	analyzer "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer"
 )
 
 func main() {
@@ -18,34 +18,40 @@ func main() {
 	signal.Notify(sig, os.Interrupt, os.Kill)
 
 	// init
-	server.Init(server.EnterpriseInit{
-		LogLevel: server.LogLevelFull,
+	analyzer.Init(analyzer.EnterpriseInit{
+		LogLevel: analyzer.LogLevelStandard,
 	})
 
-	server, err := server.New(server.ServerOptions{
-		CrtFile: "localhost.crt",
-		KeyFile: "localhost.key",
+	analyzer, err := analyzer.New(analyzer.ServerOptions{
+		CrtFile:     "localhost.crt",
+		KeyFile:     "localhost.key",
+		RabbitMQURI: "amqp://guest:guest@localhost:5672",
 	})
 	if err != nil {
-		fmt.Printf("server.New failed. Err: %v\n", err)
+		fmt.Printf("analyzer.New failed. Err: %v\n", err)
 		os.Exit(1)
 	}
 
-	// start... blocking call
-	go func() {
-		err := server.Start()
-		if err != nil {
-			fmt.Printf("server.Start() failed. Err: %v\n", err)
-		}
-	}()
+	// init
+	err = analyzer.Init()
+	if err != nil {
+		fmt.Printf("analyzer.Init failed. Err: %v\n", err)
+		os.Exit(1)
+	}
+
+	// start
+	err = analyzer.Start()
+	if err != nil {
+		fmt.Printf("analyzer.Start() failed. Err: %v\n", err)
+	}
 
 	fmt.Print("Press ENTER to exit!\n\n")
 	input := bufio.NewScanner(os.Stdin)
 	input.Scan()
 
-	err = server.Stop()
+	err = analyzer.Stop()
 	if err != nil {
-		fmt.Printf("server.Stop() failed. Err: %v\n", err)
+		fmt.Printf("analyzer.Stop() failed. Err: %v\n", err)
 	}
 
 	fmt.Printf("Succeeded!\n\n")

@@ -1,9 +1,8 @@
 // Copyright 2022 Symbl.ai SDK contributors. All Rights Reserved.
 // SPDX-License-Identifier: MIT
 
-package server
+package dataminer
 
-// streaming
 import (
 	"context"
 	"fmt"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 
+	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	wsinterfaces "github.com/koding/websocketproxy/pkg/interfaces"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	amqp "github.com/rabbitmq/amqp091-go"
 	klog "k8s.io/klog/v2"
@@ -133,7 +134,7 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 
 	// bind address
 	newServer := fmt.Sprintf("%s:%d", r.URL.Host, random)
-	klog.V(2).Infof("newServer: %s\n", newServer)
+	klog.V(2).Infof("Bind Address: %s\n", newServer)
 
 	// redirect address
 	redirect := r.URL.Host
@@ -141,7 +142,13 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 		redirect = "127.0.0.1"
 	}
 	newRedirect := fmt.Sprintf("https://%s:%d", redirect, random)
-	klog.V(2).Infof("newRedirect: %s\n", newRedirect)
+	klog.V(2).Infof("New Proxy Server: %s\n", newRedirect)
+
+	var callback symblinterfaces.InsightCallback
+	callback = <-chanCallback
+
+	var manager wsinterfaces.ManageCallback
+	manager = se
 
 	server := instance.New(instance.InstanceOptions{
 		Port:            random,
@@ -150,7 +157,8 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 		ConversationId:  conversationId,
 		CrtFile:         se.options.CrtFile,
 		KeyFile:         se.options.KeyFile,
-		Callback:        <-chanCallback,
+		Callback:        &callback,
+		Manager:         &manager,
 	})
 
 	err := server.Start()
@@ -159,8 +167,11 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to start server instance", http.StatusBadRequest)
 		return
 	}
+
+	se.mu.Lock()
 	se.instanceById[conversationId] = server
 	se.instanceByPort[random] = server
+	se.mu.Unlock()
 
 	// wait for everyone to finish
 	wg.Wait()
@@ -193,14 +204,14 @@ func (se *Server) Start() error {
 		Handler: mux,
 	}
 
-	//
-
-	// this is a blocking call
-	klog.V(2).Infof("Starting server...\n")
-	err = se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
-	if err != nil {
-		klog.V(6).Infof("ListenAndServeTLS failed. Err: %v\n", err)
-	}
+	go func() {
+		// this is a blocking call
+		klog.V(2).Infof("Starting server...\n")
+		err = se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
+		if err != nil {
+			klog.V(6).Infof("ListenAndServeTLS failed. Err: %v\n", err)
+		}
+	}()
 
 	return nil
 }
@@ -213,7 +224,7 @@ func (se *Server) RebuildDatabase() error {
 		se.driver = nil
 	}
 
-	// init
+	// init neo4j
 	// auth
 	auth := neo4j.BasicAuth(se.creds.Username, se.creds.Password, "")
 
@@ -238,7 +249,7 @@ func (se *Server) RebuildMessageBus() error {
 		se.rabbitConn = nil
 	}
 
-	// init
+	// init rabbitmq
 	conn, err := amqp.Dial(se.options.RabbitMQURI)
 	if err != nil {
 		klog.V(1).Infof("amqp.Dial failed. Err: %v\n", err)
@@ -251,14 +262,46 @@ func (se *Server) RebuildMessageBus() error {
 	return nil
 }
 
-// TODO check for dead instances
+func (se *Server) RemoveConnection(uniqueId string) {
+	se.mu.Lock()
+	instance := se.instanceById[uniqueId]
+	if instance == nil {
+		klog.V(1).Infof("RemoveConnection(%s) instance not found\n", uniqueId)
+		se.mu.Unlock()
+		return
+	}
+
+	port := instance.Options.Port
+
+	delete(se.instanceById, uniqueId)
+	delete(se.instanceByPort, port)
+
+	klog.V(2).Infof("RemoveConnection(%s) Successful\n", uniqueId)
+	se.mu.Unlock()
+}
+
+func (se *Server) CheckForDeadInstances() {
+	for _, instance := range se.instanceById {
+		if !instance.IsConnected() {
+			se.mu.Lock()
+			err := instance.Stop()
+			if err != nil {
+				klog.V(1).Infof("instance.Stop() failed. Err: %v\n", err)
+			}
+
+			delete(se.instanceById, instance.Options.ConversationId)
+			delete(se.instanceByPort, instance.Options.Port)
+			se.mu.Unlock()
+		}
+	}
+}
 
 func (se *Server) Stop() error {
 	// stop all instances
 	for _, instance := range se.instanceById {
 		err := instance.Stop()
 		if err != nil {
-			fmt.Printf("instance.Stop() failed. Err: %v\n", err)
+			klog.V(1).Infof("instance.Stop() failed. Err: %v\n", err)
 		}
 	}
 	se.instanceById = make(map[string]*instance.ServerInstance)
@@ -274,7 +317,7 @@ func (se *Server) Stop() error {
 	// stop this endpoint
 	err := se.server.Close()
 	if err != nil {
-		fmt.Printf("server.Close() failed. Err: %v\n", err)
+		klog.V(1).Infof("server.Close() failed. Err: %v\n", err)
 	}
 
 	return nil

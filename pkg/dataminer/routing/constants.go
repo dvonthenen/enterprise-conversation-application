@@ -10,4 +10,7 @@ import (
 var (
 	// ErrInvalidInput required input was not found
 	ErrInvalidInput = errors.New("required input was not found")
+
+	// ErrChannelNotFound rabbit channel was not found
+	ErrChannelNotFound = errors.New("rabbit channel was not found")
 )

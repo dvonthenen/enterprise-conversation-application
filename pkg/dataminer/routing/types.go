@@ -9,11 +9,6 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// Conversation Struct
-type Conversation struct {
-	ConversationId string `json:"conversationId,omitempty"`
-}
-
 // MessageHandlerOptions to init the handler
 type MessageHandlerOptions struct {
 	ConversationId string
@@ -40,10 +35,5 @@ type MessageHandler struct {
 
 	// rabbitmq
 	rabbitConnection *amqp.Connection
-	rabbitConvo      *amqp.Channel
-	rabbitMessages   *amqp.Channel
-	rabbitTopics     *amqp.Channel
-	rabbitTrackers   *amqp.Channel
-	rabbitEntity     *amqp.Channel
-	rabbitInsight    *amqp.Channel
+	rabbitPublish    map[string]*amqp.Channel
 }
