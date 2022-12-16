@@ -6,6 +6,7 @@ package analyzer
 import (
 	"net/http"
 
+	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -39,9 +40,15 @@ type Server struct {
 	rabbitMgr       *rabbit.RabbitManager
 	notificationMgr *handlers.NotificationManager
 
+	// TODO: Example... probably should do something better with this
+	pushData string
+
 	// neo4j
 	driver *neo4j.DriverWithContext
 
 	// rabbitmq
 	rabbitConn *amqp.Connection
+
+	// symbl client
+	symblClient *symbl.RestClient
 }

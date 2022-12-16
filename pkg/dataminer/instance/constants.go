@@ -9,6 +9,10 @@ import (
 
 const (
 	DefaultSymblWebSocket string = "wss://api.symbl.ai"
+
+	MessageTypeMessage              string = "message"
+	MessageTypeInitConversation     string = "conversation_created"
+	MessageTypeTeardownConversation string = "conversation_completed"
 )
 
 var (

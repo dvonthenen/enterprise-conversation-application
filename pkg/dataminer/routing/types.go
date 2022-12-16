@@ -28,7 +28,8 @@ type MessageRouter struct {
 // MessageHandler takes the Symbl objects and performs an action with them
 type MessageHandler struct {
 	// general
-	ConversationId string
+	ConversationId  string
+	terminationSent bool
 
 	// neo4j
 	session *neo4j.SessionWithContext

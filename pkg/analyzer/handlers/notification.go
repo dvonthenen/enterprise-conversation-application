@@ -5,7 +5,6 @@ package router
 
 import (
 	"context"
-	"sync"
 
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	klog "k8s.io/klog/v2"
@@ -19,6 +18,8 @@ func NewNotificationManager(options NotificationManagerOption) *NotificationMana
 	mgr := &NotificationManager{
 		driver:        options.Driver,
 		rabbitManager: options.RabbitManager,
+		symblClient:   options.SymblClient,
+		pushCallback:  options.PushCallback,
 	}
 	return mgr
 }
@@ -32,10 +33,11 @@ func (nm *NotificationManager) Init() error {
 		Func InitFunc
 	}
 
+	// init rabbit clients
 	myHandlers := make([]*MyHandler, 0)
 	myHandlers = append(myHandlers, &MyHandler{
-		Name: interfaces.RabbitExchangeConversation,
-		Func: NewConversationHandler,
+		Name: interfaces.RabbitExchangeConversationInit,
+		Func: NewConversationInitHandler,
 	})
 	myHandlers = append(myHandlers, &MyHandler{
 		Name: interfaces.RabbitExchangeEntity,
@@ -57,10 +59,10 @@ func (nm *NotificationManager) Init() error {
 		Name: interfaces.RabbitExchangeTracker,
 		Func: NewTrackerHandler,
 	})
-
-	// doing this concurrently because creating a neo4j session is time consuming
-	var wg sync.WaitGroup
-	wg.Add(len(myHandlers))
+	myHandlers = append(myHandlers, &MyHandler{
+		Name: interfaces.RabbitExchangeConversationTeardown,
+		Func: NewConversationTeardownHandler,
+	})
 
 	for _, myHandler := range myHandlers {
 		// create session
@@ -69,10 +71,12 @@ func (nm *NotificationManager) Init() error {
 
 		// signal
 		handler := myHandler.Func(HandlerOptions{
-			Session: &session,
+			Session:      &session,
+			SymblClient:  nm.symblClient,
+			PushCallback: nm.pushCallback,
 		})
 
-		_, err := nm.rabbitManager.CreateSubscription(rabbit.CreateOptions{
+		_, err := nm.rabbitManager.CreateSubscription(rabbit.SubscribeOptions{
 			Name:    myHandler.Name,
 			Handler: handler,
 		})

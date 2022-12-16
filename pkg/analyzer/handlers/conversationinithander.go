@@ -7,12 +7,12 @@ import (
 	prettyjson "github.com/hokaccha/go-prettyjson"
 	klog "k8s.io/klog/v2"
 
-	callback "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
+	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 )
 
-func NewInsightHandler(options HandlerOptions) *callback.RabbitMessageHandler {
-	var handler callback.RabbitMessageHandler
-	handler = InsightHandler{
+func NewConversationInitHandler(options HandlerOptions) *interfaces.RabbitMessageHandler {
+	var handler interfaces.RabbitMessageHandler
+	handler = ConversationInitHandler{
 		session:      options.Session,
 		symblClient:  options.SymblClient,
 		pushCallback: options.PushCallback,
@@ -20,7 +20,7 @@ func NewInsightHandler(options HandlerOptions) *callback.RabbitMessageHandler {
 	return &handler
 }
 
-func (ih InsightHandler) ProcessMessage(byData []byte) error {
+func (ch ConversationInitHandler) ProcessMessage(byData []byte) error {
 	// pretty print
 	prettyJson, err := prettyjson.Format(byData)
 	if err != nil {
@@ -28,7 +28,7 @@ func (ih InsightHandler) ProcessMessage(byData []byte) error {
 		return err
 	}
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(2).Infof("InsightHandler:\n%v\n", string(prettyJson))
+	klog.V(2).Infof("ConversationInitHandler:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// TODO: template for add your businesss logic

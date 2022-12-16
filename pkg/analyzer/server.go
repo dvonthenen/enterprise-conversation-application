@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 
+	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	amqp "github.com/rabbitmq/amqp091-go"
 	klog "k8s.io/klog/v2"
 
 	handlers "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/handlers"
+	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/interfaces"
 	rabbit "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit"
 )
 
@@ -61,13 +63,49 @@ func New(options ServerOptions) (*Server, error) {
 	return server, nil
 }
 
-func (se *Server) doSomething(w http.ResponseWriter, r *http.Request) {
-	// http.Redirect(w, r, newRedirect, http.StatusSeeOther)
+// TODO: Example... probably should do something better with this
+func (se *Server) displayStaticPage(w http.ResponseWriter, r *http.Request) {
+	webpageTemplate := `
+		<html>
+		<head>
+		<title>Example</title>
+		<script>
+		<!--
+		function timedRefresh(timeoutPeriod) {
+			setTimeout("location.reload(true);",timeoutPeriod);
+		}
+
+		window.onload = timedRefresh(5000);
+		//   -->
+		</script>
+		</head>
+		<body>
+		<p>Data below:</p>
+		<p>%s</p>
+		</body>
+		</html>
+	`
+	webpageHtml := fmt.Sprintf(webpageTemplate, se.pushData)
+
+	// send page to client
+	fmt.Fprintf(w, webpageHtml)
+}
+
+func (se *Server) PushNotification(msg string) error {
+	se.pushData += msg
+	return nil
 }
 
 func (se *Server) Init() error {
+	// symbl
+	err := se.RebuildSymblClient()
+	if err != nil {
+		klog.V(1).Infof("RebuildSymblClient failed. Err: %v\n", err)
+		return err
+	}
+
 	// neo4j
-	err := se.RebuildDatabase()
+	err = se.RebuildDatabase()
 	if err != nil {
 		klog.V(1).Infof("RebuildDatabase failed. Err: %v\n", err)
 		return err
@@ -95,7 +133,7 @@ func (se *Server) Start() error {
 	newServer := fmt.Sprintf("%s:%d", se.options.BindAddress, se.options.BindPort)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", se.doSomething)
+	mux.HandleFunc("/", se.displayStaticPage)
 
 	se.server = &http.Server{
 		Addr:    newServer,
@@ -110,6 +148,19 @@ func (se *Server) Start() error {
 			klog.V(1).Infof("ListenAndServeTLS failed. Err: %v\n", err)
 		}
 	}()
+
+	return nil
+}
+
+func (se *Server) RebuildSymblClient() error {
+	ctx := context.Background()
+
+	symblClient, err := symbl.NewRestClient(ctx)
+	if err != nil {
+		klog.V(1).Infof("RebuildSymblClient failed. Err: %v\n", err)
+		return err
+	}
+	se.symblClient = symblClient
 
 	return nil
 }
@@ -168,13 +219,25 @@ func (se *Server) RebuildMessageBus() error {
 	}
 
 	// rabbitmgr
+	if se.symblClient == nil {
+		err := se.RebuildSymblClient()
+		if err != nil {
+			klog.V(1).Infof("RebuildSymblClient failed. Err: %v\n", err)
+			return err
+		}
+	}
 	rabbitMgr := rabbit.New(rabbit.RabbitManagerOptions{
 		Connection: conn,
 	})
 
+	var callback interfaces.PushNotificationCallback
+	callback = se
+
 	notificationManager := handlers.NewNotificationManager(handlers.NotificationManagerOption{
 		Driver:        se.driver,
 		RabbitManager: rabbitMgr,
+		SymblClient:   se.symblClient,
+		PushCallback:  &callback,
 	})
 
 	err = notificationManager.Init()

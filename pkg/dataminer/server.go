@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	wsinterfaces "github.com/koding/websocketproxy/pkg/interfaces"
@@ -67,7 +68,8 @@ func New(options ServerOptions) (*Server, error) {
 		creds:          creds,
 		instanceById:   make(map[string]*instance.ServerInstance),
 		instanceByPort: make(map[int]*instance.ServerInstance),
-		driver:         nil,
+		ticker:         time.NewTicker(time.Minute),
+		stopPoll:       make(chan struct{}),
 	}
 	return server, nil
 }
@@ -204,12 +206,25 @@ func (se *Server) Start() error {
 		Handler: mux,
 	}
 
+	// poll for dead instances
+	checkForDeadSessions := func(stopChan chan struct{}) {
+		for {
+			select {
+			case <-se.ticker.C:
+				se.CheckForDeadInstances()
+			case <-stopChan:
+				return
+			}
+		}
+	}
+	go checkForDeadSessions(se.stopPoll)
+
 	go func() {
 		// this is a blocking call
 		klog.V(2).Infof("Starting server...\n")
 		err = se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
 		if err != nil {
-			klog.V(6).Infof("ListenAndServeTLS failed. Err: %v\n", err)
+			klog.V(6).Infof("ListenAndServeTLS server stopped. Err: %v\n", err)
 		}
 	}()
 
@@ -271,6 +286,13 @@ func (se *Server) RemoveConnection(uniqueId string) {
 		return
 	}
 
+	// stop instance cleanly
+	err := instance.Stop()
+	if err != nil {
+		klog.V(1).Infof("instance.Stop() failed. Err: %v\n", err)
+	}
+
+	// remove from record keeping
 	port := instance.Options.Port
 
 	delete(se.instanceById, uniqueId)
@@ -281,9 +303,9 @@ func (se *Server) RemoveConnection(uniqueId string) {
 }
 
 func (se *Server) CheckForDeadInstances() {
+	se.mu.Lock()
 	for _, instance := range se.instanceById {
 		if !instance.IsConnected() {
-			se.mu.Lock()
 			err := instance.Stop()
 			if err != nil {
 				klog.V(1).Infof("instance.Stop() failed. Err: %v\n", err)
@@ -291,13 +313,14 @@ func (se *Server) CheckForDeadInstances() {
 
 			delete(se.instanceById, instance.Options.ConversationId)
 			delete(se.instanceByPort, instance.Options.Port)
-			se.mu.Unlock()
 		}
 	}
+	se.mu.Unlock()
 }
 
 func (se *Server) Stop() error {
 	// stop all instances
+	se.mu.Lock()
 	for _, instance := range se.instanceById {
 		err := instance.Stop()
 		if err != nil {
@@ -306,6 +329,7 @@ func (se *Server) Stop() error {
 	}
 	se.instanceById = make(map[string]*instance.ServerInstance)
 	se.instanceByPort = make(map[int]*instance.ServerInstance)
+	se.mu.Unlock()
 
 	// clean up neo4j driver
 	ctx := context.Background()
