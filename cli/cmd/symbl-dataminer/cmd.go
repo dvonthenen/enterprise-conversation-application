@@ -19,7 +19,7 @@ func main() {
 
 	// init
 	dataminer.Init(dataminer.EnterpriseInit{
-		LogLevel: dataminer.LogLevelStandard,
+		LogLevel: dataminer.LogLevelStandard, // LogLevelStandard / LogLevelFull
 	})
 
 	dataminer, err := dataminer.New(dataminer.ServerOptions{
@@ -36,6 +36,7 @@ func main() {
 	err = dataminer.Start()
 	if err != nil {
 		fmt.Printf("dataminer.Start() failed. Err: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Print("Press ENTER to exit!\n\n")

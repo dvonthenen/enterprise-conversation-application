@@ -74,15 +74,15 @@ func New(options ServerOptions) (*Server, error) {
 	return server, nil
 }
 
-func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
+func (s *Server) redirectProxy(w http.ResponseWriter, r *http.Request) {
 	// conversationId
 	conversationId := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
-	klog.V(2).Infof("conversationId: %s\n", conversationId)
+	klog.V(3).Infof("[redirectProxy] conversationId: %s\n", conversationId)
 
 	// does the server already exist, return the serverInstance
-	serverInstance := se.instanceById[conversationId]
+	serverInstance := s.instanceById[conversationId]
 	if serverInstance != nil {
-		klog.V(2).Infof("Server for conversationId (%s) already exists\n", serverInstance.Options.ConversationId)
+		klog.V(3).Infof("Server for conversationId (%s) already exists\n", serverInstance.Options.ConversationId)
 		http.Redirect(w, r, serverInstance.Options.RedirectAddress, http.StatusSeeOther)
 	}
 
@@ -96,15 +96,15 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 
 		// Create a neo4j session to run transactions in. Sessions are lightweight to
-		// create and use. Sessions are NOT thread safe.
+		// create and us. Sessions are NOT thread safe.
 		ctx := context.Background()
-		session := (*se.driver).NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
+		session := (*s.driver).NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
 
 		// create server
 		options := routing.MessageHandlerOptions{
 			ConversationId:   conversationId,
 			Session:          &session,
-			RabbitConnection: se.rabbitConn,
+			RabbitConnection: s.rabbitConn,
 		}
 		callback, err := routing.NewHandler(options)
 		if err != nil {
@@ -125,18 +125,20 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// get random port
-	diff := se.options.EndPort - se.options.StartPort
+	diff := s.options.EndPort - s.options.StartPort
 	var random int
 	for {
-		random = se.options.StartPort + rand.Intn(diff)
-		if se.instanceByPort[random] == nil {
+		random = s.options.StartPort + rand.Intn(diff)
+		if s.instanceByPort[random] == nil {
 			break // found an unused port
 		}
 	}
 
 	// bind address
-	newServer := fmt.Sprintf("%s:%d", r.URL.Host, random)
-	klog.V(2).Infof("Bind Address: %s\n", newServer)
+	newProxyServer := fmt.Sprintf("%s:%d", r.URL.Host, random)
+	klog.V(3).Infof("Proxy Bind Address: %s\n", newProxyServer)
+	newNotifyServer := fmt.Sprintf("%s:%d", r.URL.Host, (random + DefaultNotificationPortOffset))
+	klog.V(3).Infof("Notify Bind Address: %s\n", newNotifyServer)
 
 	// redirect address
 	redirect := r.URL.Host
@@ -144,36 +146,46 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 		redirect = "127.0.0.1"
 	}
 	newRedirect := fmt.Sprintf("https://%s:%d", redirect, random)
-	klog.V(2).Infof("New Proxy Server: %s\n", newRedirect)
+	klog.V(2).Infof("Proxy Redirect: %s\n", newRedirect)
 
 	var callback symblinterfaces.InsightCallback
 	callback = <-chanCallback
 
 	var manager wsinterfaces.ManageCallback
-	manager = se
+	manager = s
 
 	server := instance.New(instance.InstanceOptions{
-		Port:            random,
-		BindAddress:     newServer,
-		RedirectAddress: newRedirect,
-		ConversationId:  conversationId,
-		CrtFile:         se.options.CrtFile,
-		KeyFile:         se.options.KeyFile,
-		Callback:        &callback,
-		Manager:         &manager,
+		ProxyPort:         random,
+		NotifyPort:        (random + DefaultNotificationPortOffset),
+		ProxyBindAddress:  newProxyServer,
+		NotifyBindAddress: newNotifyServer,
+		RedirectAddress:   newRedirect,
+		ConversationId:    conversationId,
+		CrtFile:           s.options.CrtFile,
+		KeyFile:           s.options.KeyFile,
+		RabbitConn:        s.rabbitConn,
+		Callback:          &callback,
+		Manager:           &manager,
 	})
 
-	err := server.Start()
+	err := server.Init()
+	if err != nil {
+		klog.V(1).Infof("server.Init failed. Err: %v\n", err)
+		http.Error(w, "Failed to init server instance", http.StatusBadRequest)
+		return
+	}
+
+	err = server.Start()
 	if err != nil {
 		klog.V(1).Infof("server.Start failed. Err: %v\n", err)
 		http.Error(w, "Failed to start server instance", http.StatusBadRequest)
 		return
 	}
 
-	se.mu.Lock()
-	se.instanceById[conversationId] = server
-	se.instanceByPort[random] = server
-	se.mu.Unlock()
+	s.mu.Lock()
+	s.instanceById[conversationId] = server
+	s.instanceByPort[random] = server
+	s.mu.Unlock()
 
 	// wait for everyone to finish
 	wg.Wait()
@@ -182,26 +194,70 @@ func (se *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, newRedirect, http.StatusSeeOther)
 }
 
-func (se *Server) Start() error {
+func (s *Server) redirectNotification(w http.ResponseWriter, r *http.Request) {
+	// conversationId
+	klog.V(3).Infof("[redirectNotification] URL Path: %s\n", r.URL.Path)
+	split := strings.Split(r.URL.Path, "/")
+	tokenCnt := len(split)
+	conversationId := split[tokenCnt-2]
+	klog.V(3).Infof("[redirectNotification] conversationId: %s\n", conversationId)
+
+	// does the server already exist, return the serverInstance
+	serverInstance := s.instanceById[conversationId]
+	if serverInstance == nil {
+		klog.V(2).Infof("Server for conversationId (%s) doesn't exists\n", conversationId)
+		http.Error(w, "Failed to find conversationId instance", http.StatusNotFound)
+		return
+	}
+
+	// redirect address
+	redirect := r.URL.Host
+	if len(redirect) == 0 {
+		redirect = "127.0.0.1"
+	}
+	newRedirect := fmt.Sprintf("https://%s:%d%s", redirect, serverInstance.Options.NotifyPort, r.URL.Path)
+	klog.V(3).Infof("Notify Redirect: %s\n", newRedirect)
+
+	http.Redirect(w, r, newRedirect, http.StatusSeeOther)
+}
+
+func (s *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
+	lastToken := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+	klog.V(3).Infof("URL: %s\n", r.URL.String()) // TODO: fix level
+	klog.V(3).Infof("URL Path: %s\n", r.URL.Path)
+	klog.V(3).Infof("Last Token: %s\n", lastToken) // TODO: fix level
+
+	if lastToken == DefaultNotificationPath {
+		s.redirectNotification(w, r)
+	} else {
+		s.redirectProxy(w, r)
+	}
+}
+
+func (s *Server) Start() error {
+	klog.V(6).Infof("Server.Start ENTER\n")
+
 	// neo4j
-	err := se.RebuildDatabase()
+	err := s.RebuildDatabase()
 	if err != nil {
 		klog.V(6).Infof("RebuildDatabase failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.Start LEAVE\n")
 		return err
 	}
 
 	// rabbitmq
-	err = se.RebuildMessageBus()
+	err = s.RebuildMessageBus()
 	if err != nil {
 		klog.V(6).Infof("RebuildDatabase failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.Start LEAVE\n")
 		return err
 	}
 
 	// redirect
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", se.redirectToInstance)
+	mux.HandleFunc("/", s.redirectToInstance)
 
-	se.server = &http.Server{
+	s.server = &http.Server{
 		Addr:    ":443",
 		Handler: mux,
 	}
@@ -210,79 +266,98 @@ func (se *Server) Start() error {
 	checkForDeadSessions := func(stopChan chan struct{}) {
 		for {
 			select {
-			case <-se.ticker.C:
-				se.CheckForDeadInstances()
+			case <-s.ticker.C:
+				s.CheckForDeadInstances()
 			case <-stopChan:
 				return
 			}
 		}
 	}
-	go checkForDeadSessions(se.stopPoll)
+	go checkForDeadSessions(s.stopPoll)
 
 	go func() {
 		// this is a blocking call
 		klog.V(2).Infof("Starting server...\n")
-		err = se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
+		err = s.server.ListenAndServeTLS(s.options.CrtFile, s.options.KeyFile)
 		if err != nil {
 			klog.V(6).Infof("ListenAndServeTLS server stopped. Err: %v\n", err)
 		}
 	}()
 
+	klog.V(4).Infof("Server.Start Succeeded\n")
+	klog.V(6).Infof("Server.Start LEAVE\n")
+
 	return nil
 }
 
-func (se *Server) RebuildDatabase() error {
+func (s *Server) RebuildDatabase() error {
+	klog.V(6).Infof("Server.RebuildDatabase ENTER\n")
+
 	//teardown
-	if se.driver != nil {
+	if s.driver != nil {
 		ctx := context.Background()
-		(*se.driver).Close(ctx)
-		se.driver = nil
+		(*s.driver).Close(ctx)
+		s.driver = nil
 	}
 
 	// init neo4j
 	// auth
-	auth := neo4j.BasicAuth(se.creds.Username, se.creds.Password, "")
+	auth := neo4j.BasicAuth(s.creds.Username, s.creds.Password, "")
 
 	// You typically have one driver instance for the entire application. The
 	// driver maintains a pool of database connections to be used by the sessions.
 	// The driver is thread safe.
-	driver, err := neo4j.NewDriverWithContext(se.creds.ConnectionStr, auth)
+	driver, err := neo4j.NewDriverWithContext(s.creds.ConnectionStr, auth)
 	if err != nil {
 		klog.V(1).Infof("NewDriverWithContext failed. Err: %v\n", err)
-		return err
-	}
-
-	se.driver = &driver
-
-	return err
-}
-
-func (se *Server) RebuildMessageBus() error {
-	// teardown
-	if se.rabbitConn != nil {
-		se.rabbitConn.Close()
-		se.rabbitConn = nil
-	}
-
-	// init rabbitmq
-	conn, err := amqp.Dial(se.options.RabbitMQURI)
-	if err != nil {
-		klog.V(1).Infof("amqp.Dial failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.RebuildDatabase LEAVE\n")
 		return err
 	}
 
 	// save to pass onto instances
-	se.rabbitConn = conn
+	s.driver = &driver
+
+	klog.V(4).Infof("Server.RebuildDatabase Succeeded\n")
+	klog.V(6).Infof("Server.RebuildDatabase LEAVE\n")
+
+	return err
+}
+
+func (s *Server) RebuildMessageBus() error {
+	klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
+
+	// teardown
+	if s.rabbitConn != nil {
+		s.rabbitConn.Close()
+		s.rabbitConn = nil
+	}
+
+	// init rabbitmq
+	conn, err := amqp.Dial(s.options.RabbitMQURI)
+	if err != nil {
+		klog.V(1).Infof("amqp.Dial failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
+		return err
+	}
+
+	// save to pass onto instances
+	s.rabbitConn = conn
+
+	klog.V(4).Infof("Server.RebuildMessageBus Succeeded\n")
+	klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
 
 	return nil
 }
 
-func (se *Server) RemoveConnection(uniqueId string) {
-	se.mu.Lock()
-	instance := se.instanceById[uniqueId]
+func (s *Server) RemoveConnection(uniqueId string) {
+	klog.V(6).Infof("Server.RemoveConnection ENTER\n")
+
+	s.mu.Lock()
+	instance := s.instanceById[uniqueId]
 	if instance == nil {
-		klog.V(1).Infof("RemoveConnection(%s) instance not found\n", uniqueId)
-		se.mu.Unlock()
+		klog.V(3).Infof("RemoveConnection(%s) instance not found\n", uniqueId)
+		klog.V(6).Infof("Server.RemoveConnection LEAVE\n")
+		s.mu.Unlock()
 		return
 	}
 
@@ -293,56 +368,67 @@ func (se *Server) RemoveConnection(uniqueId string) {
 	}
 
 	// remove from record keeping
-	port := instance.Options.Port
+	port := instance.Options.ProxyPort
 
-	delete(se.instanceById, uniqueId)
-	delete(se.instanceByPort, port)
+	delete(s.instanceById, uniqueId)
+	delete(s.instanceByPort, port)
 
-	klog.V(2).Infof("RemoveConnection(%s) Successful\n", uniqueId)
-	se.mu.Unlock()
+	klog.V(3).Infof("RemoveConnection(%s) Successful\n", uniqueId)
+	klog.V(6).Infof("Server.RemoveConnection LEAVE\n")
+
+	s.mu.Unlock()
 }
 
-func (se *Server) CheckForDeadInstances() {
-	se.mu.Lock()
-	for _, instance := range se.instanceById {
+func (s *Server) CheckForDeadInstances() {
+	s.mu.Lock()
+	for _, instance := range s.instanceById {
 		if !instance.IsConnected() {
 			err := instance.Stop()
 			if err != nil {
 				klog.V(1).Infof("instance.Stop() failed. Err: %v\n", err)
 			}
 
-			delete(se.instanceById, instance.Options.ConversationId)
-			delete(se.instanceByPort, instance.Options.Port)
+			delete(s.instanceById, instance.Options.ConversationId)
+			delete(s.instanceByPort, instance.Options.ProxyPort)
 		}
 	}
-	se.mu.Unlock()
+	s.mu.Unlock()
 }
 
-func (se *Server) Stop() error {
+func (s *Server) Stop() error {
+	klog.V(6).Infof("Server.Stop ENTER\n")
+
+	// stop thread
+	close(s.stopPoll)
+	<-s.stopPoll
+
 	// stop all instances
-	se.mu.Lock()
-	for _, instance := range se.instanceById {
+	s.mu.Lock()
+	for _, instance := range s.instanceById {
 		err := instance.Stop()
 		if err != nil {
 			klog.V(1).Infof("instance.Stop() failed. Err: %v\n", err)
 		}
 	}
-	se.instanceById = make(map[string]*instance.ServerInstance)
-	se.instanceByPort = make(map[int]*instance.ServerInstance)
-	se.mu.Unlock()
+	s.instanceById = make(map[string]*instance.ServerInstance)
+	s.instanceByPort = make(map[int]*instance.ServerInstance)
+	s.mu.Unlock()
 
 	// clean up neo4j driver
 	ctx := context.Background()
-	(*se.driver).Close(ctx)
+	(*s.driver).Close(ctx)
 
 	// clean up rabbitmq
-	se.rabbitConn.Close()
+	s.rabbitConn.Close()
 
 	// stop this endpoint
-	err := se.server.Close()
+	err := s.server.Close()
 	if err != nil {
 		klog.V(1).Infof("server.Close() failed. Err: %v\n", err)
 	}
+
+	klog.V(4).Infof("Server.Stop Succeeded\n")
+	klog.V(6).Infof("Server.Stop LEAVE\n")
 
 	return nil
 }

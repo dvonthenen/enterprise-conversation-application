@@ -5,8 +5,6 @@ package analyzer
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 	"os"
 
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
@@ -15,8 +13,8 @@ import (
 	klog "k8s.io/klog/v2"
 
 	handlers "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/handlers"
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/interfaces"
 	rabbit "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit"
+	common "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
 )
 
 func New(options ServerOptions) (*Server, error) {
@@ -63,166 +61,166 @@ func New(options ServerOptions) (*Server, error) {
 	return server, nil
 }
 
-// TODO: Example... probably should do something better with this
-func (se *Server) displayStaticPage(w http.ResponseWriter, r *http.Request) {
-	webpageTemplate := `
-		<html>
-		<head>
-		<title>Example</title>
-		<script>
-		<!--
-		function timedRefresh(timeoutPeriod) {
-			setTimeout("location.reload(true);",timeoutPeriod);
-		}
+func (s *Server) Init() error {
+	klog.V(6).Infof("Server.Init ENTER\n")
 
-		window.onload = timedRefresh(5000);
-		//   -->
-		</script>
-		</head>
-		<body>
-		<p>Data below:</p>
-		<p>%s</p>
-		</body>
-		</html>
-	`
-	webpageHtml := fmt.Sprintf(webpageTemplate, se.pushData)
-
-	// send page to client
-	fmt.Fprintf(w, webpageHtml)
-}
-
-func (se *Server) PushNotification(msg string) error {
-	se.pushData += msg
-	return nil
-}
-
-func (se *Server) Init() error {
 	// symbl
-	err := se.RebuildSymblClient()
+	err := s.RebuildSymblClient()
 	if err != nil {
 		klog.V(1).Infof("RebuildSymblClient failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.Init LEAVE\n")
 		return err
 	}
 
 	// neo4j
-	err = se.RebuildDatabase()
+	err = s.RebuildDatabase()
 	if err != nil {
 		klog.V(1).Infof("RebuildDatabase failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.Init LEAVE\n")
 		return err
 	}
 
 	// rabbitmq
-	err = se.RebuildMessageBus()
+	err = s.RebuildMessageBus()
 	if err != nil {
 		klog.V(1).Infof("RebuildDatabase failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.Init LEAVE\n")
 		return err
 	}
+
+	klog.V(4).Infof("Server.Init Succeeded\n")
+	klog.V(6).Infof("Server.Init LEAVE\n")
 
 	return nil
 }
 
-func (se *Server) Start() error {
+func (s *Server) Start() error {
+	klog.V(6).Infof("Server.Start ENTER\n")
+
 	// start receiving notifications
-	err := se.notificationMgr.Start()
+	klog.V(2).Infof("Starting server...\n")
+	err := s.notificationMgr.Start()
 	if err != nil {
 		klog.V(1).Infof("ListenAndServeTLS failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.Start LEAVE\n")
 		return err
 	}
 
-	// redirect
-	newServer := fmt.Sprintf("%s:%d", se.options.BindAddress, se.options.BindPort)
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", se.displayStaticPage)
-
-	se.server = &http.Server{
-		Addr:    newServer,
-		Handler: mux,
-	}
-
-	go func() {
-		// this is a blocking call
-		klog.V(2).Infof("Starting server...\n")
-		err := se.server.ListenAndServeTLS(se.options.CrtFile, se.options.KeyFile)
-		if err != nil {
-			klog.V(1).Infof("ListenAndServeTLS failed. Err: %v\n", err)
-		}
-	}()
+	klog.V(4).Infof("Server.Start Succeeded\n")
+	klog.V(6).Infof("Server.Start LEAVE\n")
 
 	return nil
 }
 
-func (se *Server) RebuildSymblClient() error {
+func (s *Server) RebuildSymblClient() error {
+	klog.V(6).Infof("Server.RebuildSymblClient ENTER\n")
+
 	ctx := context.Background()
 
 	symblClient, err := symbl.NewRestClient(ctx)
 	if err != nil {
 		klog.V(1).Infof("RebuildSymblClient failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.RebuildSymblClient LEAVE\n")
 		return err
 	}
-	se.symblClient = symblClient
+	s.symblClient = symblClient
+
+	klog.V(4).Infof("Server.RebuildSymblClient Succeded\n")
+	klog.V(6).Infof("Server.RebuildSymblClient LEAVE\n")
 
 	return nil
 }
 
-func (se *Server) RebuildDatabase() error {
+func (s *Server) RebuildDatabase() error {
+	klog.V(6).Infof("Server.RebuildDatabase ENTER\n")
+
 	//teardown
-	if se.driver != nil {
+	if s.driver != nil {
 		ctx := context.Background()
-		(*se.driver).Close(ctx)
-		se.driver = nil
+		(*s.driver).Close(ctx)
+		s.driver = nil
 	}
 
 	// init neo4j
 	// auth
-	auth := neo4j.BasicAuth(se.creds.Username, se.creds.Password, "")
+	auth := neo4j.BasicAuth(s.creds.Username, s.creds.Password, "")
 
 	// You typically have one driver instance for the entire application. The
 	// driver maintains a pool of database connections to be used by the sessions.
 	// The driver is thread safe.
-	driver, err := neo4j.NewDriverWithContext(se.creds.ConnectionStr, auth)
+	driver, err := neo4j.NewDriverWithContext(s.creds.ConnectionStr, auth)
 	if err != nil {
 		klog.V(1).Infof("NewDriverWithContext failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.RebuildDatabase LEAVE\n")
 		return err
 	}
-	se.driver = &driver
+	s.driver = &driver
+
+	klog.V(4).Infof("Server.RebuildDatabase Succeeded\n")
+	klog.V(6).Infof("Server.RebuildDatabase LEAVE\n")
 
 	return err
 }
 
-func (se *Server) RebuildMessageBus() error {
+func (s *Server) RebuildMessageBus() error {
+	klog.V(6).Infof("Server.RebuildMessageBus ENTER\n")
+
 	// teardown
-	if se.notificationMgr != nil {
-		err := se.notificationMgr.Teardown()
+	if s.notificationMgr != nil {
+		err := s.notificationMgr.Teardown()
 		if err != nil {
 			klog.V(1).Infof("notificationMgr.Teardown failed. Err: %v\n", err)
 		}
-		se.rabbitMgr = nil
+		s.rabbitMgr = nil
 	}
-	if se.rabbitMgr != nil {
-		err := se.rabbitMgr.Delete()
+	if s.rabbitMgr != nil {
+		err := s.rabbitMgr.Teardown()
 		if err != nil {
 			klog.V(1).Infof("rabbitMgr.DeleteAll failed. Err: %v\n", err)
 		}
-		se.rabbitMgr = nil
+		s.rabbitMgr = nil
 	}
-	if se.rabbitConn != nil {
-		se.rabbitConn.Close()
-		se.rabbitConn = nil
+	if s.rabbitConn != nil {
+		s.rabbitConn.Close()
+		s.rabbitConn = nil
 	}
 
 	// init
-	conn, err := amqp.Dial(se.options.RabbitMQURI)
+	conn, err := amqp.Dial(s.options.RabbitMQURI)
 	if err != nil {
 		klog.V(1).Infof("amqp.Dial failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
+		return err
+	}
+
+	// notification client messages
+	ch, err := conn.Channel()
+	if err != nil {
+		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
+		return err
+	}
+	err = ch.ExchangeDeclare(
+		common.RabbitClientNotifications, // name
+		"fanout",                         // type
+		true,                             // durable
+		true,                             // auto-deleted
+		false,                            // internal
+		false,                            // no-wait
+		nil,                              // arguments
+	)
+	if err != nil {
+		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
 		return err
 	}
 
 	// rabbitmgr
-	if se.symblClient == nil {
-		err := se.RebuildSymblClient()
+	if s.symblClient == nil {
+		err := s.RebuildSymblClient()
 		if err != nil {
 			klog.V(1).Infof("RebuildSymblClient failed. Err: %v\n", err)
+			klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
 			return err
 		}
 	}
@@ -230,49 +228,48 @@ func (se *Server) RebuildMessageBus() error {
 		Connection: conn,
 	})
 
-	var callback interfaces.PushNotificationCallback
-	callback = se
-
 	notificationManager := handlers.NewNotificationManager(handlers.NotificationManagerOption{
-		Driver:        se.driver,
+		Driver:        s.driver,
 		RabbitManager: rabbitMgr,
-		SymblClient:   se.symblClient,
-		PushCallback:  &callback,
+		SymblClient:   s.symblClient,
 	})
 
 	err = notificationManager.Init()
 	if err != nil {
 		klog.V(1).Infof("notificationManager.Init failed. Err: %v\n", err)
+		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
 		return err
 	}
 
 	// housekeeping
-	se.rabbitConn = conn
-	se.rabbitMgr = rabbitMgr
-	se.notificationMgr = notificationManager
+	s.rabbitConn = conn
+	s.rabbitMgr = rabbitMgr
+	s.notificationMgr = notificationManager
+
+	klog.V(4).Infof("Server.RebuildMessageBus Succeeded\n")
+	klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
 
 	return nil
 }
 
-func (se *Server) Stop() error {
+func (s *Server) Stop() error {
+	klog.V(6).Infof("Server.Stop ENTER\n")
+
 	// clean up neo4j driver
 	ctx := context.Background()
-	if se.driver != nil {
-		(*se.driver).Close(ctx)
+	if s.driver != nil {
+		(*s.driver).Close(ctx)
 	}
-	se.driver = nil
+	s.driver = nil
 
 	// clean up rabbitmq
-	if se.rabbitConn != nil {
-		se.rabbitConn.Close()
+	if s.rabbitConn != nil {
+		s.rabbitConn.Close()
 	}
-	se.rabbitConn = nil
+	s.rabbitConn = nil
 
-	// stop this endpoint
-	err := se.server.Close()
-	if err != nil {
-		klog.V(1).Infof("server.Close() failed. Err: %v\n", err)
-	}
+	klog.V(4).Infof("Server.Stop Succeeded\n")
+	klog.V(6).Infof("Server.Stop LEAVE\n")
 
 	return nil
 }

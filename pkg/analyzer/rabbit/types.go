@@ -14,20 +14,22 @@ import (
 /*
 	Subscriber
 */
-type SubscribeOptions struct {
-	Name    string
-	Channel *amqp.Channel
-	Queue   *amqp.Queue
-	Handler *interfaces.RabbitMessageHandler
-}
-
 type Subscriber struct {
-	options  SubscribeOptions
+	options  interfaces.SubscriberOptions
 	channel  *amqp.Channel
 	queue    *amqp.Queue
 	stopChan chan struct{}
 	handler  *interfaces.RabbitMessageHandler
 	running  bool
+}
+
+/*
+	Publisher
+*/
+type Publisher struct {
+	options interfaces.PublisherOptions
+	name    string
+	channel *amqp.Channel
 }
 
 /*
@@ -39,6 +41,7 @@ type RabbitManagerOptions struct {
 
 type RabbitManager struct {
 	// housekeeping
+	publishers  map[string]*Publisher
 	subscribers map[string]*Subscriber
 	mu          sync.Mutex
 

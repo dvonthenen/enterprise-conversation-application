@@ -4,5 +4,5 @@
 package interfaces
 
 type PushNotificationCallback interface {
-	PushNotification(msg string) error
+	PushNotification(msg []byte) error
 }

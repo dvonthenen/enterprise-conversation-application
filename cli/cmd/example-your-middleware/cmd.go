@@ -19,7 +19,7 @@ func main() {
 
 	// init
 	analyzer.Init(analyzer.EnterpriseInit{
-		LogLevel: analyzer.LogLevelStandard,
+		LogLevel: analyzer.LogLevelStandard, // LogLevelStandard / LogLevelFull
 	})
 
 	analyzer, err := analyzer.New(analyzer.ServerOptions{
@@ -35,7 +35,7 @@ func main() {
 	// init
 	err = analyzer.Init()
 	if err != nil {
-		fmt.Printf("analyzer.Init failed. Err: %v\n", err)
+		fmt.Printf("Starting analyzer. Err: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -43,6 +43,7 @@ func main() {
 	err = analyzer.Start()
 	if err != nil {
 		fmt.Printf("analyzer.Start() failed. Err: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Print("Press ENTER to exit!\n\n")

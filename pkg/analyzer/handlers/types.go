@@ -7,59 +7,59 @@ import (
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/interfaces"
 	rabbit "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit"
+	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 )
 
 /*
 	Subscriber handlers
 */
 type HandlerOptions struct {
-	Session      *neo4j.SessionWithContext // retrieve insights
-	SymblClient  *symbl.RestClient
-	PushCallback *interfaces.PushNotificationCallback
+	Session     *neo4j.SessionWithContext // retrieve insights
+	SymblClient *symbl.RestClient
+	Manager     *interfaces.RabbitManagerHandler
 }
 
 type ConversationInitHandler struct {
-	session      *neo4j.SessionWithContext
-	symblClient  *symbl.RestClient
-	pushCallback *interfaces.PushNotificationCallback
+	session     *neo4j.SessionWithContext
+	symblClient *symbl.RestClient
+	manager     *interfaces.RabbitManagerHandler
 }
 
 type EntityHandler struct {
-	session      *neo4j.SessionWithContext
-	symblClient  *symbl.RestClient
-	pushCallback *interfaces.PushNotificationCallback
+	session     *neo4j.SessionWithContext
+	symblClient *symbl.RestClient
+	manager     *interfaces.RabbitManagerHandler
 }
 
 type InsightHandler struct {
-	session      *neo4j.SessionWithContext
-	symblClient  *symbl.RestClient
-	pushCallback *interfaces.PushNotificationCallback
+	session     *neo4j.SessionWithContext
+	symblClient *symbl.RestClient
+	manager     *interfaces.RabbitManagerHandler
 }
 
 type MessageHandler struct {
-	session      *neo4j.SessionWithContext
-	symblClient  *symbl.RestClient
-	pushCallback *interfaces.PushNotificationCallback
+	session     *neo4j.SessionWithContext
+	symblClient *symbl.RestClient
+	manager     *interfaces.RabbitManagerHandler
 }
 
 type TopicHandler struct {
-	session      *neo4j.SessionWithContext
-	symblClient  *symbl.RestClient
-	pushCallback *interfaces.PushNotificationCallback
+	session     *neo4j.SessionWithContext
+	symblClient *symbl.RestClient
+	manager     *interfaces.RabbitManagerHandler
 }
 
 type TrackerHandler struct {
-	session      *neo4j.SessionWithContext
-	symblClient  *symbl.RestClient
-	pushCallback *interfaces.PushNotificationCallback
+	session     *neo4j.SessionWithContext
+	symblClient *symbl.RestClient
+	manager     *interfaces.RabbitManagerHandler
 }
 
 type ConversationTeardownHandler struct {
-	session      *neo4j.SessionWithContext
-	symblClient  *symbl.RestClient
-	pushCallback *interfaces.PushNotificationCallback
+	session     *neo4j.SessionWithContext
+	symblClient *symbl.RestClient
+	manager     *interfaces.RabbitManagerHandler
 }
 
 /*
@@ -69,7 +69,6 @@ type NotificationManagerOption struct {
 	Driver        *neo4j.DriverWithContext
 	RabbitManager *rabbit.RabbitManager
 	SymblClient   *symbl.RestClient
-	PushCallback  *interfaces.PushNotificationCallback
 }
 
 type NotificationManager struct {
@@ -81,7 +80,4 @@ type NotificationManager struct {
 
 	// rabbit
 	rabbitManager *rabbit.RabbitManager
-
-	// TODO: Example... probably should do something better with this
-	pushCallback *interfaces.PushNotificationCallback
 }
