@@ -28,7 +28,7 @@ func (mr *MessageRouter) HandleMessage(byMsg []byte) error {
 		return err
 	}
 
-	klog.V(3).Infof("HandleMessage Succeeded\n")
+	klog.V(6).Infof("HandleMessage Succeeded\n")
 	klog.V(6).Infof("MessageRouter.HandleMessage LEAVE\n")
 
 	return nil

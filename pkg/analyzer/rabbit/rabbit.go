@@ -4,29 +4,31 @@
 package rabbit
 
 import (
-	"strings"
-
 	klog "k8s.io/klog/v2"
+
+	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 )
 
 func New(options RabbitManagerOptions) *RabbitManager {
 	rabbit := &RabbitManager{
 		rabbitConn:  options.Connection,
 		subscribers: make(map[string]*Subscriber),
+		publishers:  make(map[string]*Publisher),
 	}
 	return rabbit
 }
 
-func (rm *RabbitManager) CreateSubscription(options SubscribeOptions) (*Subscriber, error) {
-	klog.V(6).Infof("rabbit.CreateSubscription ENTER\n")
+func (rm *RabbitManager) CreateSubscriber(options interfaces.SubscriberOptions) (*Subscriber, error) {
+	klog.V(6).Infof("RabbitManager.CreateSubscriber ENTER\n")
 
 	ch, err := rm.rabbitConn.Channel()
 	if err != nil {
 		klog.V(1).Infof("Channel() failed. Err: %v\n", err)
-		klog.V(6).Infof("rabbit.CreateSubscription LEAVE\n")
+		klog.V(6).Infof("RabbitManager.CreateSubscriber LEAVE\n")
 		return nil, err
 	}
 
+	klog.V(3).Infof("ExchangeDeclare: %n\n", options.Name)
 	err = ch.ExchangeDeclare(
 		options.Name, // name
 		"fanout",     // type
@@ -38,7 +40,7 @@ func (rm *RabbitManager) CreateSubscription(options SubscribeOptions) (*Subscrib
 	)
 	if err != nil {
 		klog.V(1).Infof("ExchangeDeclare(%s) failed. Err: %v\n", options.Name, err)
-		klog.V(6).Infof("rabbit.CreateSubscription LEAVE\n")
+		klog.V(6).Infof("RabbitManager.CreateSubscriber LEAVE\n")
 		return nil, err
 	}
 
@@ -52,10 +54,11 @@ func (rm *RabbitManager) CreateSubscription(options SubscribeOptions) (*Subscrib
 	)
 	if err != nil {
 		klog.V(1).Infof("QueueDeclare() failed. Err: %v\n", err)
-		klog.V(6).Infof("rabbit.CreateSubscription LEAVE\n")
+		klog.V(6).Infof("RabbitManager.CreateSubscriber LEAVE\n")
 		return nil, err
 	}
 
+	klog.V(3).Infof("QueueBind: %n\n", options.Name)
 	err = ch.QueueBind(
 		q.Name,       // queue name
 		"",           // routing key
@@ -64,7 +67,7 @@ func (rm *RabbitManager) CreateSubscription(options SubscribeOptions) (*Subscrib
 		nil)
 	if err != nil {
 		klog.V(1).Infof("QueueBind() failed. Err: %v\n", err)
-		klog.V(6).Infof("rabbit.CreateSubscription LEAVE\n")
+		klog.V(6).Infof("RabbitManager.CreateSubscriber LEAVE\n")
 		return nil, err
 	}
 
@@ -77,10 +80,41 @@ func (rm *RabbitManager) CreateSubscription(options SubscribeOptions) (*Subscrib
 	rm.subscribers[options.Name] = subscriber
 	rm.mu.Unlock()
 
-	klog.V(3).Infof("CreateSubscription(%s) Succeeded\n", options.Name)
-	klog.V(6).Infof("rabbit.CreateSubscription LEAVE\n")
+	klog.V(4).Infof("RabbitManager.CreateSubscriber(%s) Succeeded\n", options.Name)
+	klog.V(6).Infof("RabbitManager.CreateSubscriber LEAVE\n")
 
 	return subscriber, nil
+}
+
+func (rm *RabbitManager) CreatePublisher(options interfaces.PublisherOptions) error {
+	klog.V(6).Infof("RabbitManager.CreatePublisher ENTER\n")
+
+	ch, err := rm.rabbitConn.Channel()
+	if err != nil {
+		klog.V(1).Infof("Channel() failed. Err: %v\n", err)
+		klog.V(6).Infof("RabbitManager.CreatePublisher LEAVE\n")
+		return err
+	}
+
+	// setup publisher
+	options.Channel = ch
+	publisher := NewPublisher(options)
+
+	err = publisher.Init()
+	if err != nil {
+		klog.V(1).Infof("Init() failed. Err: %v\n", err)
+		klog.V(6).Infof("RabbitManager.CreatePublisher LEAVE\n")
+		return err
+	}
+
+	rm.mu.Lock()
+	rm.publishers[options.Name] = publisher
+	rm.mu.Unlock()
+
+	klog.V(4).Infof("RabbitManager.CreatePublisher(%s) Succeeded\n", options.Name)
+	klog.V(6).Infof("RabbitManager.CreatePublisher LEAVE\n")
+
+	return nil
 }
 
 func (rm *RabbitManager) Start() error {
@@ -96,56 +130,8 @@ func (rm *RabbitManager) Start() error {
 		}
 	}
 
-	klog.V(3).Infof("RabbitManager.Start Succeeded\n")
+	klog.V(4).Infof("RabbitManager.Start Succeeded\n")
 	klog.V(6).Infof("RabbitManager.Start LEAVE\n")
-
-	return nil
-}
-
-func (rm *RabbitManager) StartByName(name string) error {
-	klog.V(6).Infof("RabbitManager.StartByName(%s) ENTER\n", name)
-
-	for msgType, subscriber := range rm.subscribers {
-		if !strings.EqualFold(msgType, name) {
-			continue
-		}
-
-		err := subscriber.Start()
-		if err == nil {
-			klog.V(3).Infof("subscriber.StartByName(%s) Succeeded\n", msgType)
-		} else {
-			klog.V(1).Infof("subscriber.StartByName() failed. Err: %v\n", err)
-			klog.V(6).Infof("RabbitManager.StartByName LEAVE\n")
-			return err
-		}
-	}
-
-	klog.V(3).Infof("RabbitManager.StartByName Succeeded\n")
-	klog.V(6).Infof("RabbitManager.StartByName LEAVE\n")
-
-	return nil
-}
-
-func (rm *RabbitManager) StopByName(name string) error {
-	klog.V(6).Infof("RabbitManager.StopByName ENTER\n")
-
-	for msgType, subscriber := range rm.subscribers {
-		if !strings.EqualFold(msgType, name) {
-			continue
-		}
-
-		err := subscriber.Stop()
-		if err == nil {
-			klog.V(3).Infof("subscriber.StopByName(%s) Succeeded\n", msgType)
-		} else {
-			klog.V(1).Infof("subscriber.StopByName() failed. Err: %v\n", err)
-			klog.V(6).Infof("RabbitManager.StopByName ENTER\n")
-			return err
-		}
-	}
-
-	klog.V(3).Infof("RabbitManager.StopByName Succeeded\n")
-	klog.V(6).Infof("RabbitManager.StopByName ENTER\n")
 
 	return nil
 }
@@ -160,39 +146,67 @@ func (rm *RabbitManager) Stop() error {
 		}
 	}
 
-	klog.V(3).Infof("RabbitManager.Stop Succeeded\n")
+	klog.V(4).Infof("RabbitManager.Stop Succeeded\n")
 	klog.V(6).Infof("RabbitManager.Stop LEAVE\n")
 
 	return nil
 }
 
-func (rm *RabbitManager) DeleteByName(name string) error {
-	klog.V(6).Infof("RabbitManager.DeleteByName(%s) ENTER\n", name)
+func (rm *RabbitManager) PublishMessageByChannelName(name string, data []byte) error {
+	klog.V(6).Infof("RabbitManager.PublishMessageByChannelName ENTER\n")
 
-	for key, subscriber := range rm.subscribers {
-		if !strings.EqualFold(key, name) {
-			continue
-		}
-		err := subscriber.Stop()
-		if err != nil {
-			klog.V(1).Infof("subscriber.Stop() failed. Err: %v\n", err)
-			klog.V(6).Infof("RabbitManager.DeleteByName LEAVE\n")
-			return err
-		}
-
-		rm.mu.Lock()
-		delete(rm.subscribers, key)
-		rm.mu.Unlock()
+	klog.V(3).Infof("Publishing to: %s\n", name)
+	klog.V(3).Infof("Data: %s\n", string(data))
+	publisher := rm.publishers[name]
+	if publisher == nil {
+		klog.V(1).Infof("Publisher(%s) not found\n", name)
+		klog.V(6).Infof("RabbitManager.PublishMessageByChannelName LEAVE\n")
+		return ErrPublisherNotFound
 	}
 
-	klog.V(3).Infof("RabbitManager.DeleteByName Succeeded\n")
-	klog.V(6).Infof("RabbitManager.DeleteByName LEAVE\n")
+	err := publisher.SendMessage(data)
+	if err != nil {
+		klog.V(1).Infof("SendMessage() failed. Err: %v\n", err)
+		klog.V(6).Infof("RabbitManager.PublishMessageByChannelName LEAVE\n")
+		return err
+	}
+
+	klog.V(4).Infof("RabbitManager.PublishMessageByChannelName Succeeded\n")
+	klog.V(6).Infof("RabbitManager.PublishMessageByChannelName LEAVE\n")
 
 	return nil
 }
 
-func (rm *RabbitManager) Delete() error {
-	klog.V(6).Infof("RabbitManager.Delete ENTER\n")
+func (rm *RabbitManager) DeletePublisher(name string) error {
+	klog.V(6).Infof("RabbitManager.DeletePublisher ENTER\n")
+
+	// find
+	klog.V(3).Infof("Deleting Publisher: %s\n", name)
+	publisher := rm.publishers[name]
+	if publisher == nil {
+		klog.V(1).Infof("Publisher(%s) not found\n", name)
+		klog.V(6).Infof("RabbitManager.DeletePublisher LEAVE\n")
+		return ErrPublisherNotFound
+	}
+
+	// clean up
+	err := publisher.Teardown()
+	if err != nil {
+		klog.V(1).Infof("Teardown failed. Err: %v\n", err)
+	}
+
+	rm.mu.Lock()
+	delete(rm.publishers, name)
+	rm.mu.Unlock()
+
+	klog.V(4).Infof("RabbitManager.DeletePublisher Succeeded\n")
+	klog.V(6).Infof("RabbitManager.DeletePublisher LEAVE\n")
+
+	return nil
+}
+
+func (rm *RabbitManager) Teardown() error {
+	klog.V(6).Infof("RabbitManager.Teardown ENTER\n")
 
 	for _, subscriber := range rm.subscribers {
 		err := subscriber.Stop()
@@ -200,13 +214,20 @@ func (rm *RabbitManager) Delete() error {
 			klog.V(1).Infof("subscriber.Stop() failed. Err: %v\n", err)
 		}
 	}
+	for _, publisher := range rm.publishers {
+		err := publisher.Teardown()
+		if err != nil {
+			klog.V(1).Infof("subscriber.Stop() failed. Err: %v\n", err)
+		}
+	}
 
 	rm.mu.Lock()
 	rm.subscribers = make(map[string]*Subscriber)
+	rm.publishers = make(map[string]*Publisher)
 	rm.mu.Unlock()
 
-	klog.V(3).Infof("RabbitManager.Delete Succeeded\n")
-	klog.V(6).Infof("RabbitManager.Delete LEAVE\n")
+	klog.V(4).Infof("RabbitManager.Teardown Succeeded\n")
+	klog.V(6).Infof("RabbitManager.Teardown LEAVE\n")
 
 	return nil
 }

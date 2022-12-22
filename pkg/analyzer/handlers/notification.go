@@ -9,7 +9,6 @@ import (
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	klog "k8s.io/klog/v2"
 
-	"github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit"
 	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
 )
@@ -19,7 +18,6 @@ func NewNotificationManager(options NotificationManagerOption) *NotificationMana
 		driver:        options.Driver,
 		rabbitManager: options.RabbitManager,
 		symblClient:   options.SymblClient,
-		pushCallback:  options.PushCallback,
 	}
 	return mgr
 }
@@ -69,14 +67,18 @@ func (nm *NotificationManager) Init() error {
 		ctx := context.Background()
 		session := (*nm.driver).NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
 
+		// manager interface
+		var manager rabbitinterfaces.RabbitManagerHandler
+		manager = nm.rabbitManager
+
 		// signal
 		handler := myHandler.Func(HandlerOptions{
-			Session:      &session,
-			SymblClient:  nm.symblClient,
-			PushCallback: nm.pushCallback,
+			Session:     &session,
+			SymblClient: nm.symblClient,
+			Manager:     &manager,
 		})
 
-		_, err := nm.rabbitManager.CreateSubscription(rabbit.SubscribeOptions{
+		_, err := nm.rabbitManager.CreateSubscriber(rabbitinterfaces.SubscriberOptions{
 			Name:    myHandler.Name,
 			Handler: handler,
 		})
@@ -126,9 +128,9 @@ func (nm *NotificationManager) Stop() error {
 func (nm *NotificationManager) Teardown() error {
 	klog.V(6).Infof("NotificationManager.Teardown ENTER\n")
 
-	err := nm.rabbitManager.Delete()
+	err := nm.rabbitManager.Teardown()
 	if err != nil {
-		klog.V(1).Infof("rabbitManager.DeleteAll failed. Err: %v\n", err)
+		klog.V(1).Infof("rabbitManager.Teardown failed. Err: %v\n", err)
 		klog.V(6).Infof("NotificationManager.Stop LEAVE\n")
 		return err
 	}

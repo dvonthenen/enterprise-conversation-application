@@ -4,6 +4,9 @@
 package interfaces
 
 const (
+	// user/app level notification messages
+	UserMessageTypeAssociation string = "message_association"
+
 	// rabbit message names/exchanges
 	RabbitExchangeConversationInit     string = "conversation-created"
 	RabbitExchangeMessage              string = "message-created"
@@ -12,6 +15,7 @@ const (
 	RabbitExchangeEntity               string = "entity-created"
 	RabbitExchangeInsight              string = "insight-created"
 	RabbitExchangeConversationTeardown string = "conversation-teardown"
+	RabbitClientNotifications          string = "client-notification"
 
 	// neo4j node ID names/index/uniqueIds
 	DatabaseIndexConversation string = "conversationId"

@@ -7,15 +7,15 @@ import (
 	prettyjson "github.com/hokaccha/go-prettyjson"
 	klog "k8s.io/klog/v2"
 
-	callback "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
+	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 )
 
-func NewTopicHandler(options HandlerOptions) *callback.RabbitMessageHandler {
-	var handler callback.RabbitMessageHandler
+func NewTopicHandler(options HandlerOptions) *rabbitinterfaces.RabbitMessageHandler {
+	var handler rabbitinterfaces.RabbitMessageHandler
 	handler = TopicHandler{
-		session:      options.Session,
-		symblClient:  options.SymblClient,
-		pushCallback: options.PushCallback,
+		session:     options.Session,
+		symblClient: options.SymblClient,
+		manager:     options.Manager,
 	}
 	return &handler
 }
