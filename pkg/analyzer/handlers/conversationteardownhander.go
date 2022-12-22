@@ -10,7 +10,7 @@ import (
 	klog "k8s.io/klog/v2"
 
 	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
-	"github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
 )
 
 func NewConversationTeardownHandler(options HandlerOptions) *rabbitinterfaces.RabbitMessageHandler {
@@ -38,16 +38,16 @@ func (ch ConversationTeardownHandler) ProcessMessage(byData []byte) error {
 	var tm interfaces.TeardownMessage
 	err = json.Unmarshal(byData, &tm)
 	if err != nil {
-		klog.V(1).Infof("[ConversationInit] json.Unmarshal failed. Err: %v\n", err)
+		klog.V(1).Infof("[ConversationTeardown] json.Unmarshal failed. Err: %v\n", err)
 		return err
 	}
 
 	// need to delete a client notifier based on conversationId
 	err = (*ch.manager).DeletePublisher(tm.Message.Data.ConversationID)
-	if err != nil {
+	if err == nil {
 		klog.V(4).Infof("DeletePublisher succeeded\n")
 	} else {
-		klog.V(1).Infof("[ConversationInit] CreatePublisher failed. Err: %v\n", err)
+		klog.V(1).Infof("[ConversationTeardown] DeletePublisher failed. Err: %v\n", err)
 		return err
 	}
 

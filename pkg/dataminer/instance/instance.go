@@ -33,6 +33,12 @@ func New(options InstanceOptions) *ServerInstance {
 func (si *ServerInstance) Init() error {
 	klog.V(6).Infof("ServerInstance.Init ENTER\n")
 
+	/*
+		Start Application Channel
+
+		This implements the rabbit channel for receiving Your High-level Application messages created
+		and sent by the Analyzer component
+	*/
 	ch, err := si.rabbitConn.Channel()
 	if err != nil {
 		klog.V(1).Infof("Channel failed. Err: %v\n", err)
@@ -86,6 +92,9 @@ func (si *ServerInstance) Init() error {
 	// housekeeping
 	si.channel = ch
 	si.queue = &q
+	/*
+		End Application Channel
+	*/
 
 	klog.V(4).Infof("ServerInstance.Init Succeeded\n")
 	klog.V(6).Infof("ServerInstance.Init LEAVE\n")
@@ -103,7 +112,10 @@ func (si *ServerInstance) Start() error {
 		return err
 	}
 
-	// symbl proxy
+	/*
+		This is effectively where the hooks are placed for this Proxy service. This effectively
+		is a listener that sits in between the web client and the Symbl Platform
+	*/
 	symblServerFunc := func(stopChan chan struct{}) {
 		select {
 		default:
@@ -132,7 +144,9 @@ func (si *ServerInstance) Start() error {
 	}
 	go symblServerFunc(si.symblChan)
 
-	// async notifications
+	/*
+		This is the listener for the Application High-level Messages destined for the web client
+	*/
 	notifyServerFunc := func(stopChan chan struct{}) {
 		select {
 		default:
@@ -147,7 +161,7 @@ func (si *ServerInstance) Start() error {
 				go func() {
 					// Received Browser Disconnection
 					<-r.Context().Done()
-					println("The client is disconnected here")
+					klog.V(3).Infof("Received client disconnect notice")
 					return
 				}()
 
@@ -170,7 +184,11 @@ func (si *ServerInstance) Start() error {
 	}
 	go notifyServerFunc(si.notifyChan)
 
-	// async notifications
+	/*
+		This forwards the Higher-level Applications from the Analyzer component to the
+		web client. These are NOT Symbl conversation messages, but rather your custom application
+		messages.
+	*/
 	msgs, err := si.channel.Consume(
 		si.queue.Name, // queue
 		"",            // consumer
@@ -223,8 +241,10 @@ func (si *ServerInstance) IsConnected() bool {
 func (si *ServerInstance) Stop() error {
 	klog.V(6).Infof("ServerInstance.Stop ENTER\n")
 
-	// fire teardown message explicitly in case connection terminated abnormally
-	// there is logic in TeardownConversation() to only fire once
+	/*
+		fire off a teardown message explicitly in case connection terminated abnormally
+		there is logic in TeardownConversation() to only fire once
+	*/
 	callback := si.callback
 	if callback != nil {
 		teardownMsg := sdkinterfaces.TeardownMessage{}

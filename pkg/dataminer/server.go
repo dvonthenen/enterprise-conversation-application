@@ -223,9 +223,8 @@ func (s *Server) redirectNotification(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) redirectToInstance(w http.ResponseWriter, r *http.Request) {
 	lastToken := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
-	klog.V(3).Infof("URL: %s\n", r.URL.String()) // TODO: fix level
-	klog.V(3).Infof("URL Path: %s\n", r.URL.Path)
-	klog.V(3).Infof("Last Token: %s\n", lastToken) // TODO: fix level
+	klog.V(3).Infof("URL: %s\n", r.URL.String())
+	klog.V(3).Infof("Last Token: %s\n", lastToken)
 
 	if lastToken == DefaultNotificationPath {
 		s.redirectNotification(w, r)
@@ -275,6 +274,7 @@ func (s *Server) Start() error {
 	}
 	go checkForDeadSessions(s.stopPoll)
 
+	// start the main entry endpoint to direct traffic
 	go func() {
 		// this is a blocking call
 		klog.V(2).Infof("Starting server...\n")

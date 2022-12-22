@@ -26,7 +26,6 @@ func NewHandler(options MessageHandlerOptions) (*MessageHandler, error) {
 
 	mh := &MessageHandler{
 		ConversationId:   options.ConversationId,
-		notifyClient:     options.NotifyClient,
 		session:          options.Session,
 		rabbitConnection: options.RabbitConnection,
 		rabbitPublish:    make(map[string]*amqp.Channel),
@@ -44,8 +43,6 @@ func (mh *MessageHandler) Init() error {
 		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
 		return err
 	}
-
-	// init client event forwarder
 
 	// context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

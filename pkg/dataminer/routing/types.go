@@ -7,15 +7,12 @@ import (
 	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	amqp "github.com/rabbitmq/amqp091-go"
-
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/interfaces"
 )
 
 // MessageHandlerOptions to init the handler
 type MessageHandlerOptions struct {
 	//housekeeping
 	ConversationId string
-	NotifyClient   *interfaces.PushNotificationCallback
 
 	// neo4j
 	Session *neo4j.SessionWithContext
@@ -33,7 +30,6 @@ type MessageRouter struct {
 type MessageHandler struct {
 	// general
 	ConversationId  string
-	notifyClient    *interfaces.PushNotificationCallback
 	terminationSent bool
 
 	// neo4j
