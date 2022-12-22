@@ -18,6 +18,7 @@ import (
 	streaming "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1"
 	microphone "github.com/dvonthenen/symbl-go-sdk/pkg/audio/microphone"
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
+	prettyjson "github.com/hokaccha/go-prettyjson"
 	sse "github.com/r3labs/sse/v2"
 
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
@@ -96,11 +97,23 @@ func main() {
 					continue
 				}
 
+				prettyJson, err := prettyjson.Format(event.Data)
+				if err != nil {
+					fmt.Printf("prettyjson.Marshal failed. Err: %v\n", err)
+					continue
+				}
+
+				fmt.Printf("\n\n")
+				fmt.Printf("Application Event:\n")
+				fmt.Printf("%s\n", prettyJson)
+				fmt.Printf("\n\n")
+				fmt.Printf("Human Readable:\n")
 				fmt.Printf("This tracker (%s) was previous mentioned, here are the details:\n", cn.Data.Message.Correlation)
 				fmt.Printf("What you said:\n%s\n", cn.Data.Message.CurrentContent)
 				fmt.Printf("Previously mentioned by: %s / %s \n", cn.Data.Author.Name, cn.Data.Author.Email)
 				fmt.Printf("What they said:\n%s\n", cn.Data.Message.PreviousContent)
-				fmt.Printf("Commonality: %s == %s\n\n\n", cn.Data.Message.CurrentMatch, cn.Data.Message.PreviousMatch)
+				fmt.Printf("Commonality: %s == %s\n", cn.Data.Message.CurrentMatch, cn.Data.Message.PreviousMatch)
+				fmt.Printf("\n\n")
 
 			case <-stopChan:
 				return
