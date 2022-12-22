@@ -22,6 +22,12 @@ func NewNotificationManager(options NotificationManagerOption) *NotificationMana
 	return mgr
 }
 
+/*
+	This initializes all of the subscribers to the Symbl Dataminer component
+
+	Each rabbit subscriber listens for a specific Symbl derived/discovered conversation insight and
+	is then notified through a callback handler with the original Symbl RealTime API message struct
+*/
 func (nm *NotificationManager) Init() error {
 	klog.V(6).Infof("NotificationManager.Init ENTER\n")
 
