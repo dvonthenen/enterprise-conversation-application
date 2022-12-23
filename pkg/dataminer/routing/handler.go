@@ -955,9 +955,18 @@ func (mh *MessageHandler) TeardownConversation(tm *sdkinterfaces.TeardownMessage
 	return nil
 }
 
+// Not used
 func (mh *MessageHandler) UnhandledMessage(byMsg []byte) error {
 	klog.V(1).Infof("\n\n-------------------------------\n")
 	klog.V(1).Infof("UnhandledMessage:\n%v\n", string(byMsg))
+	klog.V(1).Infof("-------------------------------\n\n")
+	return nil
+}
+
+// Not used
+func (mh *MessageHandler) UserDefinedMessage(byMsg []byte) error {
+	klog.V(1).Infof("\n\n-------------------------------\n")
+	klog.V(1).Infof("UserDefinedMessage:\n%v\n", string(byMsg))
 	klog.V(1).Infof("-------------------------------\n\n")
 	return nil
 }

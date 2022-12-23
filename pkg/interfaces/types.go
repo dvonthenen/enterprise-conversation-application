@@ -22,18 +22,20 @@ type Message struct {
 	PreviousContent string `json:"previousContent,omitempty"`
 	PreviousMatch   string `json:"previousMatch,omitempty"`
 }
+
 type Data struct {
+	Type    string  `json:"type,omitempty"`
 	Author  Author  `json:"author,omitempty"`
 	Message Message `json:"message,omitempty"`
 }
 
 type ClientTrackerMessage struct {
-	MessageType string `json:"messageType,omitempty"`
-	Data        Data   `json:"data,omitempty"`
+	Type string `json:"type,omitempty"`
+	Data Data   `json:"data,omitempty"`
 }
 
 type ClientMessageType struct {
-	MessageType string `json:"messageType,omitempty"`
+	Type string `json:"type,omitempty"`
 }
 
 /*

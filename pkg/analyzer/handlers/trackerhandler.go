@@ -13,6 +13,7 @@ import (
 
 	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	sdkinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 )
 
 func NewTrackerHandler(options HandlerOptions) *rabbitinterfaces.RabbitMessageHandler {
@@ -83,8 +84,9 @@ func (ch TrackerHandler) ProcessMessage(byData []byte) error {
 					for _, refs := range match.MessageRefs {
 						// send a message per match
 						msg := interfaces.ClientTrackerMessage{
-							MessageType: interfaces.UserMessageTypeAssociation,
+							Type: sdkinterfaces.MessageTypeUserDefined,
 							Data: interfaces.Data{
+								Type: interfaces.UserMessageTypeAssociation,
 								Author: interfaces.Author{
 									Name:  user.Props["name"].(string),
 									Email: user.Props["email"].(string),
@@ -150,9 +152,11 @@ func (ch TrackerHandler) ProcessMessage(byData []byte) error {
 				for _, match := range tracker.Matches {
 					for _, refs := range match.InsightRefs {
 						// send a message per match
+
 						msg := interfaces.ClientTrackerMessage{
-							MessageType: interfaces.UserMessageTypeAssociation,
+							Type: sdkinterfaces.MessageTypeUserDefined,
 							Data: interfaces.Data{
+								Type: interfaces.UserMessageTypeAssociation,
 								Author: interfaces.Author{
 									Name:  user.Props["name"].(string),
 									Email: user.Props["email"].(string),
