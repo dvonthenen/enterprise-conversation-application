@@ -7,10 +7,7 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"time"
@@ -18,10 +15,7 @@ import (
 	streaming "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1"
 	microphone "github.com/dvonthenen/symbl-go-sdk/pkg/audio/microphone"
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
-	prettyjson "github.com/hokaccha/go-prettyjson"
-	sse "github.com/r3labs/sse/v2"
-
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	// sse "github.com/r3labs/sse/v2"
 )
 
 func main() {
@@ -33,13 +27,13 @@ func main() {
 
 	// create a new client
 	cfg := symbl.GetDefaultConfig()
-	cfg.Speaker.Name = "John Doe"
-	cfg.Speaker.UserID = "john.doe@mymail.com"
+	cfg.Speaker.Name = "Jane Doe"
+	cfg.Speaker.UserID = "jane.doe@mymail.com"
 
 	options := symbl.StreamingOptions{
 		SymblConfig:  cfg,
-		Callback:     streaming.NewDefaultMessageRouter(),
 		ProxyAddress: "127.0.0.1",
+		Callback:     streaming.NewDefaultMessageRouter(),
 	}
 
 	client, err := symbl.NewStreamClient(ctx, options)
@@ -60,69 +54,69 @@ func main() {
 		os.Exit(1)
 	}
 
-	// client notifications
-	notificationURI := fmt.Sprintf("https://127.0.0.1/%s/notifications", conversationId)
-	fmt.Printf("notificationURI: %s\n", notificationURI)
-	notifications := sse.NewClient(notificationURI, func(c *sse.Client) {
-		/* #nosec G402 */
-		c.Connection.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		c.RedirectService = true
-		c.SkipServerAuth = true
-	})
+	// client notifications using sse
+	// notificationURI := fmt.Sprintf("https://127.0.0.1/%s/notifications", conversationId)
+	// fmt.Printf("notificationURI: %s\n", notificationURI)
+	// notifications := sse.NewClient(notificationURI, func(c *sse.Client) {
+	// 	/* #nosec G402 */
+	// 	c.Connection.Transport = &http.Transport{
+	// 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	// 	}
+	// 	c.RedirectService = true
+	// 	c.SkipServerAuth = true
+	// })
 
-	// listen for events
-	stopPoll := make(chan struct{})
-	eventsChan := make(chan *sse.Event)
-	go func() {
-		notifications.SubscribeChan("messages", eventsChan)
-	}()
+	// // listen for events
+	// stopPoll := make(chan struct{})
+	// eventsChan := make(chan *sse.Event)
+	// go func() {
+	// 	notifications.SubscribeChan("messages", eventsChan)
+	// }()
 
-	waitForMessages := func(eventsChan chan *sse.Event, stopChan chan struct{}) {
-		for {
-			select {
-			default:
-				fmt.Printf("Waiting for event...\n")
-				event := <-eventsChan
+	// waitForMessages := func(eventsChan chan *sse.Event, stopChan chan struct{}) {
+	// 	for {
+	// 		select {
+	// 		default:
+	// 			fmt.Printf("Waiting for event...\n")
+	// 			event := <-eventsChan
 
-				// you typically would unmarshal for ClientMessageType, then use MessageType to determine
-				// which struct to use to rebuild the object
-				// in this case, we are only using ClientTrackerMessage since that is the only app-level
-				// message that is implemented
-				var cn interfaces.ClientTrackerMessage
-				err = json.Unmarshal(event.Data, &cn)
-				if err != nil {
-					fmt.Printf("json.Unmarshal failed. Err: %v\n", err)
-					continue
-				}
+	// 			// you typically would unmarshal for ClientMessageType, then use MessageType to determine
+	// 			// which struct to use to rebuild the object
+	// 			// in this case, we are only using ClientTrackerMessage since that is the only app-level
+	// 			// message that is implemented
+	// 			var cn interfaces.ClientTrackerMessage
+	// 			err = json.Unmarshal(event.Data, &cn)
+	// 			if err != nil {
+	// 				fmt.Printf("json.Unmarshal failed. Err: %v\n", err)
+	// 				continue
+	// 			}
 
-				prettyJson, err := prettyjson.Format(event.Data)
-				if err != nil {
-					fmt.Printf("prettyjson.Marshal failed. Err: %v\n", err)
-					continue
-				}
+	// 			prettyJson, err := prettyjson.Format(event.Data)
+	// 			if err != nil {
+	// 				fmt.Printf("prettyjson.Marshal failed. Err: %v\n", err)
+	// 				continue
+	// 			}
 
-				fmt.Printf("\n\n")
-				fmt.Printf("Application Event:\n")
-				fmt.Printf("%s\n", prettyJson)
-				fmt.Printf("\n\n")
-				fmt.Printf("Human Readable:\n")
-				fmt.Printf("This tracker (%s) was previous mentioned, here are the details:\n", cn.Data.Message.Correlation)
-				fmt.Printf("What you said:\n%s\n", cn.Data.Message.CurrentContent)
-				fmt.Printf("Previously mentioned by: %s / %s \n", cn.Data.Author.Name, cn.Data.Author.Email)
-				fmt.Printf("What they said:\n%s\n", cn.Data.Message.PreviousContent)
-				fmt.Printf("Commonality: %s == %s\n", cn.Data.Message.CurrentMatch, cn.Data.Message.PreviousMatch)
-				fmt.Printf("\n\n")
+	// 			fmt.Printf("\n\n")
+	// 			fmt.Printf("Application Event:\n")
+	// 			fmt.Printf("%s\n", prettyJson)
+	// 			fmt.Printf("\n\n")
+	// 			fmt.Printf("Human Readable:\n")
+	// 			fmt.Printf("This tracker (%s) was previous mentioned, here are the details:\n", cn.Data.Message.Correlation)
+	// 			fmt.Printf("What you said:\n%s\n", cn.Data.Message.CurrentContent)
+	// 			fmt.Printf("Previously mentioned by: %s / %s \n", cn.Data.Author.Name, cn.Data.Author.Email)
+	// 			fmt.Printf("What they said:\n%s\n", cn.Data.Message.PreviousContent)
+	// 			fmt.Printf("Commonality: %s == %s\n", cn.Data.Message.CurrentMatch, cn.Data.Message.PreviousMatch)
+	// 			fmt.Printf("\n\n")
 
-			case <-stopChan:
-				return
-			}
-		}
-	}
+	// 		case <-stopChan:
+	// 			return
+	// 		}
+	// 	}
+	// }
 
-	fmt.Print("Listening for events\n")
-	go waitForMessages(eventsChan, stopPoll)
+	// fmt.Print("Listening for events\n")
+	// go waitForMessages(eventsChan, stopPoll)
 
 	// delay...
 	time.Sleep(time.Second)

@@ -211,9 +211,19 @@ func (si *ServerInstance) Start() error {
 				for d := range msgs {
 					klog.V(5).Infof(" [x] %s\n", d.Body)
 
-					si.notification.Publish("messages", &sse.Event{
-						Data: []byte(d.Body),
-					})
+					switch si.Options.NotifyType {
+					case ClientNotifyTypeWebSocket:
+						err = si.proxy.SendMessage(d.Body)
+						if err != nil {
+							klog.V(1).Infof("SendMessage failed. Err: %v\n", err)
+						}
+					case ClientNotifyTypeServerSendEvent:
+						si.notification.Publish("messages", &sse.Event{
+							Data: []byte(d.Body),
+						})
+					default:
+						klog.V(1).Infof("Unknown Message Type: %d\n", si.Options.NotifyType)
+					}
 				}
 			case <-stopChan:
 				klog.V(6).Infof("Exiting Messaging Loop\n")

@@ -14,9 +14,13 @@ import (
 )
 
 type InstanceOptions struct {
+	// options
+	CrtFile    string
+	KeyFile    string
+	NotifyType ClientNotifyType
+
+	// housekeeping
 	ConversationId    string
-	CrtFile           string
-	KeyFile           string
 	ProxyBindAddress  string
 	NotifyBindAddress string
 	RedirectAddress   string

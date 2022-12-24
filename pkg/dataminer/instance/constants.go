@@ -15,6 +15,13 @@ const (
 	MessageTypeTeardownConversation string = "conversation_completed"
 )
 
+type ClientNotifyType int
+
+const (
+	ClientNotifyTypeWebSocket ClientNotifyType = iota
+	ClientNotifyTypeServerSendEvent
+)
+
 var (
 	// ErrInvalidInput required input was not found
 	ErrInvalidInput = errors.New("required input was not found")
