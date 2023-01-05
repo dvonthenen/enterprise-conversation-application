@@ -4,12 +4,11 @@
 package analyzer
 
 import (
+	rabbit "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
-	amqp "github.com/rabbitmq/amqp091-go"
 
 	handlers "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/handlers"
-	rabbit "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit"
 )
 
 // Credentials is the input needed to login to neo4j
@@ -25,7 +24,7 @@ type ServerOptions struct {
 	KeyFile     string
 	BindAddress string
 	BindPort    int
-	RabbitMQURI string
+	RabbitURI   string
 }
 
 type Server struct {
@@ -34,14 +33,11 @@ type Server struct {
 	creds   Credentials
 
 	// bookkeeping
-	rabbitMgr       *rabbit.RabbitManager
+	rabbitMgr       *rabbit.Manager
 	notificationMgr *handlers.NotificationManager
 
 	// neo4j
 	driver *neo4j.DriverWithContext
-
-	// rabbitmq
-	rabbitConn *amqp.Connection
 
 	// symbl client
 	symblClient *symbl.RestClient

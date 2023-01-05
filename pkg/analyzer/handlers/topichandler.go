@@ -7,7 +7,7 @@ import (
 	prettyjson "github.com/hokaccha/go-prettyjson"
 	klog "k8s.io/klog/v2"
 
-	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 )
 
 func NewTopicHandler(options HandlerOptions) *rabbitinterfaces.RabbitMessageHandler {

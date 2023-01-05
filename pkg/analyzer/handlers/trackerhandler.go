@@ -11,8 +11,8 @@ import (
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	klog "k8s.io/klog/v2"
 
-	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	sdkinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 )
 
@@ -106,7 +106,10 @@ func (ch TrackerHandler) ProcessMessage(byData []byte) error {
 							klog.V(1).Infof("MessageResponse json.Marshal failed. Err: %v\n", err)
 						}
 
-						err = (*ch.manager).PublishMessageByChannelName(tr.ConversationID, data)
+						/*
+							This sends your High-level Application message back to the Dataminer component
+						*/
+						err = (*ch.manager).PublishMessageByName(tr.ConversationID, data)
 						if err != nil {
 							klog.V(1).Infof("PushNotification failed. Err: %v\n", err)
 						}
@@ -176,7 +179,10 @@ func (ch TrackerHandler) ProcessMessage(byData []byte) error {
 							klog.V(1).Infof("MessageResponse json.Marshal failed. Err: %v\n", err)
 						}
 
-						err = (*ch.manager).PublishMessageByChannelName(tr.ConversationID, data)
+						/*
+							This sends your High-level Application message back to the Dataminer component
+						*/
+						err = (*ch.manager).PublishMessageByName(tr.ConversationID, data)
 						if err != nil {
 							klog.V(1).Infof("PushNotification failed. Err: %v\n", err)
 						}

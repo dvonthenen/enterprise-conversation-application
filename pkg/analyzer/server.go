@@ -7,14 +7,13 @@ import (
 	"context"
 	"os"
 
+	rabbit "github.com/dvonthenen/rabbitmq-manager/pkg"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
-	amqp "github.com/rabbitmq/amqp091-go"
 	klog "k8s.io/klog/v2"
 
 	handlers "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/handlers"
-	rabbit "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit"
-	common "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
 )
 
 func New(options ServerOptions) (*Server, error) {
@@ -97,11 +96,37 @@ func (s *Server) Init() error {
 func (s *Server) Start() error {
 	klog.V(6).Infof("Server.Start ENTER\n")
 
-	// start receiving notifications
-	klog.V(2).Infof("Starting server...\n")
-	err := s.notificationMgr.Start()
+	// rebuild neo4j driver if needed
+	if s.driver == nil {
+		klog.V(4).Infof("Calling RebuildDatabase...\n")
+		err := s.RebuildDatabase()
+		if err != nil {
+			klog.V(1).Infof("RebuildDatabase failed. Err: %v\n", err)
+			klog.V(6).Infof("Server.Start LEAVE\n")
+			return err
+		}
+	}
+
+	// rebuild symbl client if needed
+	if s.symblClient == nil {
+		klog.V(4).Infof("Calling RebuildSymblClient...\n")
+		err := s.RebuildSymblClient()
+		if err != nil {
+			klog.V(1).Infof("RebuildSymblClient failed. Err: %v\n", err)
+			klog.V(6).Infof("Server.Start LEAVE\n")
+			return err
+		}
+	}
+
+	// setup notification manager
+	notificationManager := handlers.NewNotificationManager(handlers.NotificationManagerOption{
+		Driver:        s.driver,
+		RabbitManager: s.rabbitMgr,
+		SymblClient:   s.symblClient,
+	})
+	err := notificationManager.Init()
 	if err != nil {
-		klog.V(1).Infof("ListenAndServeTLS failed. Err: %v\n", err)
+		klog.V(1).Infof("notificationManager.Init failed. Err: %v\n", err)
 		klog.V(6).Infof("Server.Start LEAVE\n")
 		return err
 	}
@@ -123,6 +148,8 @@ func (s *Server) RebuildSymblClient() error {
 		klog.V(6).Infof("Server.RebuildSymblClient LEAVE\n")
 		return err
 	}
+
+	// housekeeping
 	s.symblClient = symblClient
 
 	klog.V(4).Infof("Server.RebuildSymblClient Succeded\n")
@@ -142,7 +169,6 @@ func (s *Server) RebuildDatabase() error {
 	}
 
 	// init neo4j
-	// auth
 	auth := neo4j.BasicAuth(s.creds.Username, s.creds.Password, "")
 
 	// You typically have one driver instance for the entire application. The
@@ -154,6 +180,8 @@ func (s *Server) RebuildDatabase() error {
 		klog.V(6).Infof("Server.RebuildDatabase LEAVE\n")
 		return err
 	}
+
+	// housekeeping
 	s.driver = &driver
 
 	klog.V(4).Infof("Server.RebuildDatabase Succeeded\n")
@@ -166,85 +194,26 @@ func (s *Server) RebuildMessageBus() error {
 	klog.V(6).Infof("Server.RebuildMessageBus ENTER\n")
 
 	// teardown
-	if s.notificationMgr != nil {
-		err := s.notificationMgr.Teardown()
-		if err != nil {
-			klog.V(1).Infof("notificationMgr.Teardown failed. Err: %v\n", err)
-		}
-		s.rabbitMgr = nil
-	}
 	if s.rabbitMgr != nil {
-		err := s.rabbitMgr.Teardown()
+		err := (*s.rabbitMgr).Teardown()
 		if err != nil {
-			klog.V(1).Infof("rabbitMgr.DeleteAll failed. Err: %v\n", err)
+			klog.V(1).Infof("rabbitMgr.Teardown failed. Err: %v\n", err)
 		}
 		s.rabbitMgr = nil
 	}
-	if s.rabbitConn != nil {
-		s.rabbitConn.Close()
-		s.rabbitConn = nil
-	}
 
-	// init
-	conn, err := amqp.Dial(s.options.RabbitMQURI)
-	if err != nil {
-		klog.V(1).Infof("amqp.Dial failed. Err: %v\n", err)
-		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
-		return err
-	}
-
-	// notification client messages
-	ch, err := conn.Channel()
-	if err != nil {
-		klog.V(1).Infof("conn.Channel failed. Err: %v\n", err)
-		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
-		return err
-	}
-	err = ch.ExchangeDeclare(
-		common.RabbitClientNotifications, // name
-		"fanout",                         // type
-		true,                             // durable
-		true,                             // auto-deleted
-		false,                            // internal
-		false,                            // no-wait
-		nil,                              // arguments
-	)
-	if err != nil {
-		klog.V(1).Infof("ch.ExchangeDeclare failed. Err: %v\n", err)
-		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
-		return err
-	}
-
-	// rabbitmgr
-	if s.symblClient == nil {
-		err := s.RebuildSymblClient()
-		if err != nil {
-			klog.V(1).Infof("RebuildSymblClient failed. Err: %v\n", err)
-			klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
-			return err
-		}
-	}
-	rabbitMgr := rabbit.New(rabbit.RabbitManagerOptions{
-		Connection: conn,
+	// setup rabbit manager
+	rabbitMgr, err := rabbit.New(rabbitinterfaces.ManagerOptions{
+		RabbitURI: s.options.RabbitURI,
 	})
-
-	notificationManager := handlers.NewNotificationManager(handlers.NotificationManagerOption{
-		Driver:        s.driver,
-		RabbitManager: rabbitMgr,
-		SymblClient:   s.symblClient,
-	})
-
-	err = notificationManager.Init()
 	if err != nil {
-		klog.V(1).Infof("notificationManager.Init failed. Err: %v\n", err)
+		klog.V(1).Infof("rabbit.New failed. Err: %v\n", err)
 		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
 		return err
 	}
 
 	// housekeeping
-	s.rabbitConn = conn
 	s.rabbitMgr = rabbitMgr
-	s.notificationMgr = notificationManager
 
 	klog.V(4).Infof("Server.RebuildMessageBus Succeeded\n")
 	klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
@@ -255,18 +224,30 @@ func (s *Server) RebuildMessageBus() error {
 func (s *Server) Stop() error {
 	klog.V(6).Infof("Server.Stop ENTER\n")
 
+	// clean up notification
+	if s.notificationMgr != nil {
+		err := s.notificationMgr.Teardown()
+		if err != nil {
+			klog.V(1).Infof("notificationMgr.Teardown failed. Err: %v\n", err)
+		}
+	}
+	s.notificationMgr = nil
+
+	// clean up rabbit
+	if s.rabbitMgr != nil {
+		err := (*s.rabbitMgr).Teardown()
+		if err != nil {
+			klog.V(1).Infof("rabbitMgr.Teardown failed. Err: %v\n", err)
+		}
+	}
+	s.rabbitMgr = nil
+
 	// clean up neo4j driver
-	ctx := context.Background()
 	if s.driver != nil {
+		ctx := context.Background()
 		(*s.driver).Close(ctx)
 	}
 	s.driver = nil
-
-	// clean up rabbitmq
-	if s.rabbitConn != nil {
-		s.rabbitConn.Close()
-	}
-	s.rabbitConn = nil
 
 	klog.V(4).Infof("Server.Stop Succeeded\n")
 	klog.V(6).Infof("Server.Stop LEAVE\n")

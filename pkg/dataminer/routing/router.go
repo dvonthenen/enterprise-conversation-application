@@ -5,13 +5,12 @@ package routing
 
 import (
 	streaming "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1"
-	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	klog "k8s.io/klog/v2"
 )
 
-func NewRouter(callback *interfaces.InsightCallback) *MessageRouter {
+func NewRouter(options MessageRouterOptions) *MessageRouter {
 	mr := &MessageRouter{
-		callback: callback,
+		callback: options.Callback,
 	}
 	return mr
 }

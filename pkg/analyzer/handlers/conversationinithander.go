@@ -9,8 +9,8 @@ import (
 	prettyjson "github.com/hokaccha/go-prettyjson"
 	klog "k8s.io/klog/v2"
 
-	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 )
 
 func NewConversationInitHandler(options HandlerOptions) *rabbitinterfaces.RabbitMessageHandler {
@@ -42,9 +42,15 @@ func (ch ConversationInitHandler) ProcessMessage(byData []byte) error {
 		return err
 	}
 
-	// need to create a client notifier per conversation
-	err = (*ch.manager).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name: im.Message.Data.ConversationID,
+	/*
+		Create Application Channel Publisher
+
+		This implements the rabbit channel for sending your High-level Application messages
+		sent by this component based on the conversationId
+	*/
+	_, err = (*ch.manager).CreatePublisher(rabbitinterfaces.PublisherOptions{
+		Name:        im.Message.Data.ConversationID,
+		AutoDeleted: true,
 	})
 	if err == nil {
 		klog.V(4).Infof("CreatePublisher succeeded\n")
