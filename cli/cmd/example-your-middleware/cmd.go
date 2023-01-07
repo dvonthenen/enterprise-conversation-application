@@ -19,7 +19,7 @@ func main() {
 
 	// init
 	analyzer.Init(analyzer.EnterpriseInit{
-		LogLevel: analyzer.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace
+		LogLevel: analyzer.LogLevelTrace, // LogLevelStandard / LogLevelFull / LogLevelTrace
 	})
 
 	analyzer, err := analyzer.New(analyzer.ServerOptions{

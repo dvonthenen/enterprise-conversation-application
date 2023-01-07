@@ -84,7 +84,7 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
-		NoWait:      true,
+		// NoWait:      true,
 	})
 	if err != nil {
 		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeConversationInit, err)
@@ -95,7 +95,7 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
-		NoWait:      true,
+		// NoWait:      true,
 	})
 	if err != nil {
 		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeMessage, err)
@@ -106,7 +106,7 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
-		NoWait:      true,
+		// NoWait:      true,
 	})
 	if err != nil {
 		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeTopic, err)
@@ -117,7 +117,7 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
-		NoWait:      true,
+		// NoWait:      true,
 	})
 	if err != nil {
 		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeTracker, err)
@@ -128,7 +128,7 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
-		NoWait:      true,
+		// NoWait:      true,
 	})
 	if err != nil {
 		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeEntity, err)
@@ -139,7 +139,7 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
-		NoWait:      true,
+		// NoWait:      true,
 	})
 	if err != nil {
 		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeInsight, err)
@@ -150,7 +150,7 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
-		NoWait:      true,
+		// NoWait:      true,
 	})
 	if err != nil {
 		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeConversationTeardown, err)

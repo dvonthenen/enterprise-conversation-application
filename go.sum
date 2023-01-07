@@ -12,6 +12,8 @@ github.com/dvonthenen/rabbitmq-manager v0.0.0-20230106030424-2873235be901 h1:eut
 github.com/dvonthenen/rabbitmq-manager v0.0.0-20230106030424-2873235be901/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
 github.com/dvonthenen/rabbitmq-manager v0.1.0 h1:rBAg5abP4WV916xpIIwoBcgSvdHpzopcyBmvSYJUFvw=
 github.com/dvonthenen/rabbitmq-manager v0.1.0/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
+github.com/dvonthenen/rabbitmq-manager v0.1.1 h1:I0Sl2DA2rgZBPqzXG+/yD5+/oadKf0xjahDdwo71HEY=
+github.com/dvonthenen/rabbitmq-manager v0.1.1/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
 github.com/dvonthenen/sse/v2 v2.0.0-20221222171132-1daa5f8b774c h1:eu91E8j21DyoIXJyC9dNC5hSK2yrkmPzvh0t6zwQts0=
 github.com/dvonthenen/sse/v2 v2.0.0-20221222171132-1daa5f8b774c/go.mod h1:Igau6Whc+F17QUgML1fYe1VPZzTV6EMCnYktEmkNJ7I=
 github.com/dvonthenen/symbl-go-sdk v0.1.4-0.20221224023133-35e1f570ee05 h1:sr4Y9MoRb7zqFbvL5o5kV6RT2cVltVpgZ/EnrAi5wWY=

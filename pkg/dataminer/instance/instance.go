@@ -67,7 +67,8 @@ func (p *Proxy) Init() error {
 		Name:        p.options.ConversationId,
 		AutoDeleted: true,
 		IfUnused:    true,
-		Handler:     &rabbitHandler,
+		// NoWait:      true,
+		Handler: &rabbitHandler,
 	})
 	if err != nil {
 		klog.V(1).Infof("CreateSubscriber %s failed. Err: %v\n", p.options.ConversationId, err)

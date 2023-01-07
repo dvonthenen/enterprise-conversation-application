@@ -51,6 +51,8 @@ func (ch ConversationInitHandler) ProcessMessage(byData []byte) error {
 	_, err = (*ch.manager).CreatePublisher(rabbitinterfaces.PublisherOptions{
 		Name:        im.Message.Data.ConversationID,
 		AutoDeleted: true,
+		IfUnused:    true,
+		// NoWait:      true,
 	})
 	if err == nil {
 		klog.V(4).Infof("CreatePublisher succeeded\n")
