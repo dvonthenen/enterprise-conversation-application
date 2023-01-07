@@ -4,10 +4,18 @@
 package routing
 
 import (
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+/*
+	Options to init objects...
+*/
+// MessageRouterOptions to init the router
+type MessageRouterOptions struct {
+	Callback *symblinterfaces.InsightCallback
+}
 
 // MessageHandlerOptions to init the handler
 type MessageHandlerOptions struct {
@@ -15,12 +23,15 @@ type MessageHandlerOptions struct {
 	ConversationId string
 
 	// neo4j
-	Session *neo4j.SessionWithContext
+	Neo4jMgr *neo4j.SessionWithContext
 
 	// neo4j session
-	RabbitConnection *amqp.Connection
+	RabbitMgr *rabbitinterfaces.Manager
 }
 
+/*
+	The objects...
+*/
 // MessageRouter converts messages to Symbl objects
 type MessageRouter struct {
 	callback *symblinterfaces.InsightCallback
@@ -29,13 +40,12 @@ type MessageRouter struct {
 // MessageHandler takes the Symbl objects and performs an action with them
 type MessageHandler struct {
 	// general
-	ConversationId  string
+	conversationId  string
 	terminationSent bool
 
 	// neo4j
-	session *neo4j.SessionWithContext
+	neo4jMgr *neo4j.SessionWithContext
 
 	// rabbitmq
-	rabbitConnection *amqp.Connection
-	rabbitPublish    map[string]*amqp.Channel
+	rabbitMgr *rabbitinterfaces.Manager
 }

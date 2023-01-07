@@ -6,41 +6,43 @@ package instance
 import (
 	"net/http"
 
-	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
 	wsinterfaces "github.com/koding/websocketproxy/pkg/interfaces"
+	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	sse "github.com/r3labs/sse/v2"
-	amqp "github.com/rabbitmq/amqp091-go"
+
+	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/routing"
 )
 
-type InstanceOptions struct {
-	// options
-	CrtFile    string
-	KeyFile    string
-	NotifyType ClientNotifyType
-
+type ProxyOptions struct {
 	// housekeeping
 	ConversationId    string
+	RabbitURI         string
 	ProxyBindAddress  string
 	NotifyBindAddress string
 	RedirectAddress   string
 	ProxyPort         int
 	NotifyPort        int
+	NotifyType        ClientNotifyType
 
-	RabbitConn *amqp.Connection
-	Callback   *symblinterfaces.InsightCallback
-	Manager    *wsinterfaces.ManageCallback
+	// SSL Serve
+	CrtFile string
+	KeyFile string
+
+	// objects
+	Neo4jMgr *neo4j.SessionWithContext
+	ProxyMgr *wsinterfaces.ManageCallback
 }
 
-type ServerInstance struct {
-	Options InstanceOptions
+type Proxy struct {
+	options ProxyOptions
 
 	// housekeeping
-	callback    *symblinterfaces.InsightCallback
-	manager     *wsinterfaces.ManageCallback
-	channel     *amqp.Channel
-	queue       *amqp.Queue
-	messageChan chan struct{}
+	// callback *symblinterfaces.InsightCallback
+	neo4jMgr   *neo4j.SessionWithContext
+	messageMgr *routing.MessageHandler
+	proxyMgr   *wsinterfaces.ManageCallback
 
 	// symbl proxy housekeeping
 	proxy       *halfproxy.HalfDuplexWebsocketProxy
@@ -48,10 +50,10 @@ type ServerInstance struct {
 	symblChan   chan struct{}
 
 	// rabbit notifications
-	rabbitConn *amqp.Connection
+	rabbitMgr *rabbitinterfaces.Manager
 
 	// server send events
-	notification *sse.Server
+	notifySse    *sse.Server
 	notifyServer *http.Server
 	notifyChan   chan struct{}
 }

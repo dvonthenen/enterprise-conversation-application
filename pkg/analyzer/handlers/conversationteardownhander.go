@@ -9,8 +9,8 @@ import (
 	prettyjson "github.com/hokaccha/go-prettyjson"
 	klog "k8s.io/klog/v2"
 
-	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 )
 
 func NewConversationTeardownHandler(options HandlerOptions) *rabbitinterfaces.RabbitMessageHandler {
@@ -42,7 +42,12 @@ func (ch ConversationTeardownHandler) ProcessMessage(byData []byte) error {
 		return err
 	}
 
-	// need to delete a client notifier based on conversationId
+	/*
+		Delete Application Channel Publisher
+
+		This cleans up the rabbit channel for sending your High-level Application messages
+		sent by this component based on the conversationId
+	*/
 	err = (*ch.manager).DeletePublisher(tm.Message.Data.ConversationID)
 	if err == nil {
 		klog.V(4).Infof("DeletePublisher succeeded\n")

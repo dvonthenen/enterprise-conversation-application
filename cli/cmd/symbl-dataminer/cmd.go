@@ -19,13 +19,13 @@ func main() {
 
 	// init
 	dataminer.Init(dataminer.EnterpriseInit{
-		LogLevel: dataminer.LogLevelStandard, // LogLevelStandard / LogLevelFull
+		LogLevel: dataminer.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace
 	})
 
 	dataminer, err := dataminer.New(dataminer.ServerOptions{
-		CrtFile:     "localhost.crt",
-		KeyFile:     "localhost.key",
-		RabbitMQURI: "amqp://guest:guest@localhost:5672",
+		CrtFile:   "localhost.crt",
+		KeyFile:   "localhost.key",
+		RabbitURI: "amqp://guest:guest@localhost:5672",
 	})
 	if err != nil {
 		fmt.Printf("dataminer.New failed. Err: %v\n", err)
@@ -33,6 +33,7 @@ func main() {
 	}
 
 	// start
+	fmt.Printf("Starting server...\n")
 	err = dataminer.Start()
 	if err != nil {
 		fmt.Printf("dataminer.Start() failed. Err: %v\n", err)
@@ -48,5 +49,5 @@ func main() {
 		fmt.Printf("dataminer.Stop() failed. Err: %v\n", err)
 	}
 
-	fmt.Printf("Succeeded!\n\n")
+	fmt.Printf("Server stopped...\n\n")
 }

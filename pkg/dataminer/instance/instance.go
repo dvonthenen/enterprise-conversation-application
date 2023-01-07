@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"net/url"
 
+	rabbit "github.com/dvonthenen/rabbitmq-manager/pkg"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	sdkinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	common "github.com/koding/websocketproxy/pkg/common"
 	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
 	sse "github.com/r3labs/sse/v2"
@@ -17,123 +20,138 @@ import (
 	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/routing"
 )
 
-func New(options InstanceOptions) *ServerInstance {
-	server := &ServerInstance{
-		Options:     options,
-		rabbitConn:  options.RabbitConn,
-		callback:    options.Callback,
-		manager:     options.Manager,
-		messageChan: make(chan struct{}),
-		symblChan:   make(chan struct{}),
-		notifyChan:  make(chan struct{}),
+func New(options ProxyOptions) *Proxy {
+	server := &Proxy{
+		options:  options,
+		neo4jMgr: options.Neo4jMgr,
+		proxyMgr: options.ProxyMgr,
 	}
 	return server
 }
 
-func (si *ServerInstance) Init() error {
-	klog.V(6).Infof("ServerInstance.Init ENTER\n")
+func (p *Proxy) GetRedirectAddress() string {
+	return p.options.RedirectAddress
+}
+
+func (p *Proxy) GetProxyPort() int {
+	return p.options.ProxyPort
+}
+
+func (p *Proxy) GetNotifyPort() int {
+	return p.options.NotifyPort
+}
+
+func (p *Proxy) Init() error {
+	klog.V(6).Infof("Proxy.Init ENTER\n")
+
+	// init rabbit manager
+	rabbitMgr, err := rabbit.New(rabbitinterfaces.ManagerOptions{
+		RabbitURI: p.options.RabbitURI,
+	})
+	if err != nil {
+		klog.V(1).Infof("rabbit.New failed. Err: %v\n", err)
+		klog.V(6).Infof("Proxy.Init LEAVE\n")
+		return err
+	}
 
 	/*
-		Start Application Channel
+		Create Application Channel Subscriber
 
-		This implements the rabbit channel for receiving Your High-level Application messages created
-		and sent by the Analyzer component
+		This implements the rabbit channel for receiving your High-level Application messages
+		sent by the Analyzer component
 	*/
-	ch, err := si.rabbitConn.Channel()
+	var rabbitHandler rabbitinterfaces.RabbitMessageHandler
+	rabbitHandler = p
+
+	_, err = (*rabbitMgr).CreateSubscriber(rabbitinterfaces.SubscriberOptions{
+		Name:        p.options.ConversationId,
+		AutoDeleted: true,
+		IfUnused:    true,
+		Handler:     &rabbitHandler,
+	})
 	if err != nil {
-		klog.V(1).Infof("Channel failed. Err: %v\n", err)
-		klog.V(6).Infof("ServerInstance.Init LEAVE\n")
+		klog.V(1).Infof("CreateSubscriber %s failed. Err: %v\n", p.options.ConversationId, err)
+		klog.V(6).Infof("Proxy.Init LEAVE\n")
 		return err
 	}
 
-	klog.V(3).Infof("ExchangeDeclare: %v\n", si.Options.ConversationId)
-	err = ch.ExchangeDeclare(
-		si.Options.ConversationId, // name
-		"fanout",                  // type
-		true,                      // durable
-		true,                      // auto-deleted
-		false,                     // internal
-		false,                     // no-wait
-		nil,                       // arguments
-	)
+	// create message router
+	options := routing.MessageHandlerOptions{
+		ConversationId: p.options.ConversationId,
+		Neo4jMgr:       p.neo4jMgr,
+		RabbitMgr:      rabbitMgr,
+	}
+	messageMgr, err := routing.NewHandler(options)
 	if err != nil {
-		klog.V(1).Infof("ExchangeDeclare(%s) failed. Err: %v\n", si.Options.ConversationId, err)
-		klog.V(6).Infof("ServerInstance.Init LEAVE\n")
+		klog.V(1).Infof("routing.NewHandler failed. Err: %v\n", err)
+		klog.V(6).Infof("Proxy.Init LEAVE\n")
 		return err
 	}
 
-	q, err := ch.QueueDeclare(
-		"",    // name
-		true,  // durable
-		true,  // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
+	// init callback
+	err = messageMgr.Init()
 	if err != nil {
-		klog.V(1).Infof("QueueDeclare() failed. Err: %v\n", err)
-		klog.V(6).Infof("ServerInstance.Init LEAVE\n")
+		klog.V(1).Infof("messageMgr.Init failed. Err: %v\n", err)
+		klog.V(6).Infof("Proxy.Init LEAVE\n")
 		return err
 	}
 
-	klog.V(3).Infof("QueueBind: %v\n", si.Options.ConversationId)
-	err = ch.QueueBind(
-		q.Name,                    // queue name
-		"",                        // routing key
-		si.Options.ConversationId, // exchange
-		false,
-		nil)
+	// init rabbit
+	err = (*rabbitMgr).Init()
 	if err != nil {
-		klog.V(1).Infof("QueueBind() failed. Err: %v\n", err)
-		klog.V(6).Infof("ServerInstance.Init LEAVE\n")
+		klog.V(1).Infof("rabbitMgr.Init failed. Err: %v\n", err)
+		klog.V(6).Infof("Proxy.Init LEAVE\n")
 		return err
 	}
 
 	// housekeeping
-	si.channel = ch
-	si.queue = &q
-	/*
-		End Application Channel
-	*/
+	p.rabbitMgr = rabbitMgr
+	p.messageMgr = messageMgr
 
-	klog.V(4).Infof("ServerInstance.Init Succeeded\n")
-	klog.V(6).Infof("ServerInstance.Init LEAVE\n")
+	klog.V(4).Infof("Proxy.Init Succeeded\n")
+	klog.V(6).Infof("Proxy.Init LEAVE\n")
 
 	return nil
 }
 
-func (si *ServerInstance) Start() error {
-	klog.V(6).Infof("ServerInstance.Start ENTER\n")
+func (p *Proxy) Start() error {
+	klog.V(6).Infof("Proxy.Start ENTER\n")
 
 	u, err := url.Parse(DefaultSymblWebSocket)
 	if err != nil {
 		klog.V(1).Infof("New failed. Err: %v\n", err)
-		klog.V(6).Infof("ServerInstance.Start LEAVE\n")
+		klog.V(6).Infof("Proxy.Start LEAVE\n")
 		return err
 	}
 
 	/*
-		This is effectively where the hooks are placed for this Proxy service. This effectively
-		is a listener that sits in between the web client and the Symbl Platform
+		This is where the hooks are placed for this Proxy service. This implements
+		a listener that sits in between the Client Application (ie CPaaS) and the Symbl Platform
 	*/
+	p.symblChan = make(chan struct{})
 	symblServerFunc := func(stopChan chan struct{}) {
 		select {
 		default:
+			var callback symblinterfaces.InsightCallback
+			callback = p.messageMgr
+
 			proxy := halfproxy.NewProxy(common.ProxyOptions{
-				UniqueID:      si.Options.ConversationId,
+				UniqueID:      p.options.ConversationId,
 				Url:           u,
 				NaturalTunnel: true,
-				Viewer:        routing.NewRouter(si.callback),
-				Manager:       *si.manager,
+				Viewer: routing.NewRouter(routing.MessageRouterOptions{
+					Callback: &callback,
+				}),
+				Manager: *p.proxyMgr,
 			})
-			si.proxy = proxy
+			p.proxy = proxy
 
-			si.serverSymbl = &http.Server{
-				Addr:    si.Options.ProxyBindAddress,
+			p.serverSymbl = &http.Server{
+				Addr:    p.options.ProxyBindAddress,
 				Handler: proxy,
 			}
 
-			err = si.serverSymbl.ListenAndServeTLS(si.Options.CrtFile, si.Options.KeyFile)
+			err = p.serverSymbl.ListenAndServeTLS(p.options.CrtFile, p.options.KeyFile)
 			if err != nil {
 				klog.V(1).Infof("ListenAndServeTLS server stopped. Err: %v\n", err)
 			}
@@ -142,158 +160,171 @@ func (si *ServerInstance) Start() error {
 			return
 		}
 	}
-	go symblServerFunc(si.symblChan)
+	go symblServerFunc(p.symblChan)
 
 	/*
-		This is the listener for the Application High-level Messages destined for the web client
+		This is the listener for the Higher-level Application-specific Messages destined for the
+		Client Application
 	*/
-	notifyServerFunc := func(stopChan chan struct{}) {
-		select {
-		default:
-			si.notification = sse.New()
-			si.notification.CreateStream("messages")
-
-			notifyPath := fmt.Sprintf("/%s/notifications", si.Options.ConversationId)
-			klog.V(3).Infof("notifyPath: %s\n", notifyPath)
-
-			mux := http.NewServeMux()
-			mux.HandleFunc(notifyPath, func(w http.ResponseWriter, r *http.Request) {
-				go func() {
-					// Received Browser Disconnection
-					<-r.Context().Done()
-					klog.V(3).Infof("Received client disconnect notice")
-					return
-				}()
-
-				si.notification.ServeHTTP(w, r)
-			})
-
-			si.notifyServer = &http.Server{
-				Addr:    si.Options.NotifyBindAddress,
-				Handler: mux,
-			}
-
-			err = si.notifyServer.ListenAndServeTLS(si.Options.CrtFile, si.Options.KeyFile)
-			if err != nil {
-				klog.V(1).Infof("ListenAndServeTLS server stopped. Err: %v\n", err)
-			}
-		case <-stopChan:
-			klog.V(6).Infof("Exiting notifyServer Loop\n")
-			return
-		}
-	}
-	go notifyServerFunc(si.notifyChan)
-
-	/*
-		This forwards the Higher-level Applications from the Analyzer component to the
-		web client. These are NOT Symbl conversation messages, but rather your custom application
-		messages.
-	*/
-	msgs, err := si.channel.Consume(
-		si.queue.Name, // queue
-		"",            // consumer
-		true,          // auto-ack
-		false,         // exclusive
-		false,         // no-local
-		false,         // no-wait
-		nil,           // args
-	)
-	if err != nil {
-		klog.V(1).Infof("Consume failed. Err: %v\n", err)
-		return err
-	}
-
-	klog.V(5).Infof("Server.Start Running message loop...\n")
-	processNotifyMsg := func(stopChan chan struct{}) {
-		for {
+	if p.options.NotifyType == ClientNotifyTypeServerSendEvent {
+		p.notifyChan = make(chan struct{})
+		notifyServerFunc := func(stopChan chan struct{}) {
 			select {
 			default:
-				for d := range msgs {
-					klog.V(5).Infof(" [x] %s\n", d.Body)
+				p.notifySse = sse.New()
+				p.notifySse.CreateStream("messages")
 
-					switch si.Options.NotifyType {
-					case ClientNotifyTypeWebSocket:
-						err = si.proxy.SendMessage(d.Body)
-						if err != nil {
-							klog.V(1).Infof("SendMessage failed. Err: %v\n", err)
-						}
-					case ClientNotifyTypeServerSendEvent:
-						si.notification.Publish("messages", &sse.Event{
-							Data: []byte(d.Body),
-						})
-					default:
-						klog.V(1).Infof("Unknown Message Type: %d\n", si.Options.NotifyType)
-					}
+				notifyPath := fmt.Sprintf("/%s/notifications", p.options.ConversationId)
+				klog.V(3).Infof("notifyPath: %s\n", notifyPath)
+
+				mux := http.NewServeMux()
+				mux.HandleFunc(notifyPath, func(w http.ResponseWriter, r *http.Request) {
+					go func() {
+						// Received Browser Disconnection
+						<-r.Context().Done()
+						klog.V(3).Infof("Received client disconnect notice")
+						return
+					}()
+
+					p.notifySse.ServeHTTP(w, r)
+				})
+
+				p.notifyServer = &http.Server{
+					Addr:    p.options.NotifyBindAddress,
+					Handler: mux,
+				}
+
+				err = p.notifyServer.ListenAndServeTLS(p.options.CrtFile, p.options.KeyFile)
+				if err != nil {
+					klog.V(1).Infof("ListenAndServeTLS server stopped. Err: %v\n", err)
 				}
 			case <-stopChan:
-				klog.V(6).Infof("Exiting Messaging Loop\n")
+				klog.V(6).Infof("Exiting notifyServer Loop\n")
 				return
 			}
 		}
+		go notifyServerFunc(p.notifyChan)
 	}
-	go processNotifyMsg(si.messageChan)
 
-	klog.V(4).Infof("ServerInstance.Start Succeeded\n")
-	klog.V(6).Infof("ServerInstance.Start LEAVE\n")
+	klog.V(4).Infof("Proxy.Start Succeeded\n")
+	klog.V(6).Infof("Proxy.Start LEAVE\n")
 
 	return nil
 }
 
-func (si *ServerInstance) IsConnected() bool {
-	if si.serverSymbl == nil || si.serverSymbl.Handler == nil {
+func (p *Proxy) ProcessMessage(byData []byte) error {
+	/*
+		This forwards the Higher-level Application Messages from the Analyzer component to the
+		Client Application (Web UI, CPaaS, etc). These are NOT Symbl conversation messages, but
+		rather your custom application messages.
+	*/
+	klog.V(5).Infof(" [x] %s\n", string(byData))
+
+	switch p.options.NotifyType {
+	case ClientNotifyTypeWebSocket:
+		if p.options.NotifyType != ClientNotifyTypeWebSocket || p.proxy == nil {
+			return ErrInvalidNotifyConfig
+		}
+		err := p.proxy.SendMessage(byData)
+		if err != nil {
+			klog.V(1).Infof("SendMessage failed. Err: %v\n", err)
+		}
+		return err
+	case ClientNotifyTypeServerSendEvent:
+		if p.options.NotifyType != ClientNotifyTypeServerSendEvent || p.notifySse == nil {
+			return ErrInvalidNotifyConfig
+		}
+		p.notifySse.Publish("messages", &sse.Event{
+			Data: []byte(byData),
+		})
+		return nil
+	default:
+		klog.V(1).Infof("Unknown Message Type: %d\n", p.options.NotifyType)
+		return ErrUnknownNotifyType
+	}
+
+	return nil
+}
+
+func (p *Proxy) IsConnected() bool {
+	if p.serverSymbl == nil || p.serverSymbl.Handler == nil {
 		return false
 	}
-	isConnected := si.proxy.IsConnected()
-	klog.V(3).Infof("ServerInstance.IsConnected: %t\n", isConnected)
+	isConnected := p.proxy.IsConnected()
+	klog.V(3).Infof("Proxy.IsConnected: %t\n", isConnected)
 	return isConnected
 }
 
-func (si *ServerInstance) Stop() error {
-	klog.V(6).Infof("ServerInstance.Stop ENTER\n")
+func (p *Proxy) Stop() error {
+	klog.V(6).Infof("Proxy.Stop ENTER\n")
 
 	/*
 		fire off a teardown message explicitly in case connection terminated abnormally
 		there is logic in TeardownConversation() to only fire once
 	*/
-	callback := si.callback
-	if callback != nil {
+	if p.messageMgr != nil {
 		teardownMsg := sdkinterfaces.TeardownMessage{}
 		teardownMsg.Type = MessageTypeMessage
 		teardownMsg.Message.Type = MessageTypeTeardownConversation
-		teardownMsg.Message.Data.ConversationID = si.Options.ConversationId
+		teardownMsg.Message.Data.ConversationID = p.options.ConversationId
 
-		err := (*callback).TeardownConversation(&teardownMsg)
+		err := p.messageMgr.TeardownConversation(&teardownMsg)
 		if err != nil {
 			klog.V(1).Infof("TeardownConversation failed. Err: %v\n", err)
 		}
 	}
 
 	// wait for threads
-	close(si.messageChan)
-	<-si.messageChan
-	close(si.symblChan)
-	<-si.symblChan
-	close(si.notifyChan)
-	<-si.notifyChan
-
-	// rabbit
-	if si.channel != nil {
-		si.channel.Close()
-		si.channel = nil
+	if p.symblChan != nil {
+		close(p.symblChan)
+		<-p.symblChan
 	}
+	if p.notifyChan != nil {
+		close(p.notifyChan)
+		<-p.notifyChan
+	}
+
+	// delete the handler
+	if p.messageMgr != nil {
+		err := p.messageMgr.Teardown()
+		if err != nil {
+			klog.V(1).Infof("messageMgr.Teardown() failed. Err: %v\n", err)
+		}
+	}
+
+	/*
+		Delete Application Channel Subscriber
+
+		This delete the rabbit channel for receiving your High-level Application messages
+		sent by the Analyzer component
+	*/
+	if p.rabbitMgr != nil {
+		err := (*p.rabbitMgr).Teardown()
+		if err != nil {
+			klog.V(1).Infof("rabbitMgr.Teardown() failed. Err: %v\n", err)
+		}
+	}
+	p.rabbitMgr = nil
 
 	// close HTTP server
-	err := si.notifyServer.Close()
-	if err != nil {
-		klog.V(1).Infof("notifyServer.Close() failed. Err: %v\n", err)
+	if p.notifyServer != nil {
+		err := p.notifyServer.Close()
+		if err != nil {
+			klog.V(1).Infof("notifyServer.Close() failed. Err: %v\n", err)
+		}
 	}
-	err = si.serverSymbl.Close()
-	if err != nil {
-		klog.V(1).Infof("serverSymbl.Close() failed. Err: %v\n", err)
-	}
+	p.notifyServer = nil
 
-	klog.V(4).Infof("ServerInstance.Stop Succeeded\n")
-	klog.V(6).Infof("ServerInstance.Stop LEAVE\n")
+	if p.serverSymbl != nil {
+		err := p.serverSymbl.Close()
+		if err != nil {
+			klog.V(1).Infof("serverSymbl.Close() failed. Err: %v\n", err)
+		}
+	}
+	p.serverSymbl = nil
+
+	klog.V(4).Infof("Proxy.Stop Succeeded\n")
+	klog.V(6).Infof("Proxy.Stop LEAVE\n")
 
 	return nil
 }

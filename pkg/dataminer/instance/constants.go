@@ -25,4 +25,10 @@ const (
 var (
 	// ErrInvalidInput required input was not found
 	ErrInvalidInput = errors.New("required input was not found")
+
+	// ErrInvalidNotifyConfig invalid notify configuration
+	ErrInvalidNotifyConfig = errors.New("invalid notify configuration")
+
+	// ErrUnknownNotifyType unknown notify message type
+	ErrUnknownNotifyType = errors.New("unknown notify message type")
 )

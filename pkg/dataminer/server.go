@@ -10,17 +10,13 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
-	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	wsinterfaces "github.com/koding/websocketproxy/pkg/interfaces"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
-	amqp "github.com/rabbitmq/amqp091-go"
 	klog "k8s.io/klog/v2"
 
 	instance "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/instance"
-	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/routing"
 )
 
 func New(options ServerOptions) (*Server, error) {
@@ -66,8 +62,8 @@ func New(options ServerOptions) (*Server, error) {
 	server := &Server{
 		options:        options,
 		creds:          creds,
-		instanceById:   make(map[string]*instance.ServerInstance),
-		instanceByPort: make(map[int]*instance.ServerInstance),
+		instanceById:   make(map[string]*instance.Proxy),
+		instanceByPort: make(map[int]*instance.Proxy),
 		ticker:         time.NewTicker(time.Minute),
 		stopPoll:       make(chan struct{}),
 	}
@@ -82,47 +78,14 @@ func (s *Server) redirectProxy(w http.ResponseWriter, r *http.Request) {
 	// does the server already exist, return the serverInstance
 	serverInstance := s.instanceById[conversationId]
 	if serverInstance != nil {
-		klog.V(3).Infof("Server for conversationId (%s) already exists\n", serverInstance.Options.ConversationId)
-		http.Redirect(w, r, serverInstance.Options.RedirectAddress, http.StatusSeeOther)
+		klog.V(3).Infof("Server for conversationId (%s) already exists\n", conversationId)
+		http.Redirect(w, r, serverInstance.GetRedirectAddress(), http.StatusSeeOther)
 	}
 
-	// need to do this concurrently because the session create takes time
-	chanCallback := make(chan *routing.MessageHandler)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		// signal done
-		defer wg.Done()
-
-		// Create a neo4j session to run transactions in. Sessions are lightweight to
-		// create and us. Sessions are NOT thread safe.
-		ctx := context.Background()
-		session := (*s.driver).NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
-
-		// create server
-		options := routing.MessageHandlerOptions{
-			ConversationId:   conversationId,
-			Session:          &session,
-			RabbitConnection: s.rabbitConn,
-		}
-		callback, err := routing.NewHandler(options)
-		if err != nil {
-			klog.V(1).Infof("server.Start failed. Err: %v\n", err)
-			http.Error(w, "Failed to create message handler", http.StatusBadRequest)
-			return
-		}
-
-		// init
-		err = callback.Init()
-		if err != nil {
-			klog.V(1).Infof("callback.Init failed. Err: %v\n", err)
-			http.Error(w, "Failed to init message handler", http.StatusBadRequest)
-			return
-		}
-
-		chanCallback <- callback
-	}()
+	// Create a neo4j session to run transactions in. Sessions are lightweight to
+	// create and us. Sessions are NOT thread safe.
+	ctx := context.Background()
+	session := (*s.driver).NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
 
 	// get random port
 	diff := s.options.EndPort - s.options.StartPort
@@ -148,24 +111,21 @@ func (s *Server) redirectProxy(w http.ResponseWriter, r *http.Request) {
 	newRedirect := fmt.Sprintf("https://%s:%d", redirect, random)
 	klog.V(2).Infof("Proxy Redirect: %s\n", newRedirect)
 
-	var callback symblinterfaces.InsightCallback
-	callback = <-chanCallback
-
 	var manager wsinterfaces.ManageCallback
 	manager = s
 
-	server := instance.New(instance.InstanceOptions{
+	server := instance.New(instance.ProxyOptions{
+		ConversationId:    conversationId,
+		RabbitURI:         s.options.RabbitURI,
 		ProxyPort:         random,
 		NotifyPort:        (random + DefaultNotificationPortOffset),
 		ProxyBindAddress:  newProxyServer,
 		NotifyBindAddress: newNotifyServer,
 		RedirectAddress:   newRedirect,
-		ConversationId:    conversationId,
 		CrtFile:           s.options.CrtFile,
 		KeyFile:           s.options.KeyFile,
-		RabbitConn:        s.rabbitConn,
-		Callback:          &callback,
-		Manager:           &manager,
+		Neo4jMgr:          &session,
+		ProxyMgr:          &manager,
 	})
 
 	err := server.Init()
@@ -186,9 +146,6 @@ func (s *Server) redirectProxy(w http.ResponseWriter, r *http.Request) {
 	s.instanceById[conversationId] = server
 	s.instanceByPort[random] = server
 	s.mu.Unlock()
-
-	// wait for everyone to finish
-	wg.Wait()
 
 	// redirect
 	http.Redirect(w, r, newRedirect, http.StatusSeeOther)
@@ -215,7 +172,7 @@ func (s *Server) redirectNotification(w http.ResponseWriter, r *http.Request) {
 	if len(redirect) == 0 {
 		redirect = "127.0.0.1"
 	}
-	newRedirect := fmt.Sprintf("https://%s:%d%s", redirect, serverInstance.Options.NotifyPort, r.URL.Path)
+	newRedirect := fmt.Sprintf("https://%s:%d%s", redirect, serverInstance.GetNotifyPort(), r.URL.Path)
 	klog.V(3).Infof("Notify Redirect: %s\n", newRedirect)
 
 	http.Redirect(w, r, newRedirect, http.StatusSeeOther)
@@ -237,19 +194,14 @@ func (s *Server) Start() error {
 	klog.V(6).Infof("Server.Start ENTER\n")
 
 	// neo4j
-	err := s.RebuildDatabase()
-	if err != nil {
-		klog.V(6).Infof("RebuildDatabase failed. Err: %v\n", err)
-		klog.V(6).Infof("Server.Start LEAVE\n")
-		return err
-	}
-
-	// rabbitmq
-	err = s.RebuildMessageBus()
-	if err != nil {
-		klog.V(6).Infof("RebuildDatabase failed. Err: %v\n", err)
-		klog.V(6).Infof("Server.Start LEAVE\n")
-		return err
+	if s.driver == nil {
+		klog.V(4).Infof("Calling RebuildDatabase...\n")
+		err := s.RebuildDatabase()
+		if err != nil {
+			klog.V(1).Infof("RebuildDatabase failed. Err: %v\n", err)
+			klog.V(6).Infof("Server.Start LEAVE\n")
+			return err
+		}
 	}
 
 	// redirect
@@ -277,8 +229,7 @@ func (s *Server) Start() error {
 	// start the main entry endpoint to direct traffic
 	go func() {
 		// this is a blocking call
-		klog.V(2).Infof("Starting server...\n")
-		err = s.server.ListenAndServeTLS(s.options.CrtFile, s.options.KeyFile)
+		err := s.server.ListenAndServeTLS(s.options.CrtFile, s.options.KeyFile)
 		if err != nil {
 			klog.V(6).Infof("ListenAndServeTLS server stopped. Err: %v\n", err)
 		}
@@ -301,7 +252,6 @@ func (s *Server) RebuildDatabase() error {
 	}
 
 	// init neo4j
-	// auth
 	auth := neo4j.BasicAuth(s.creds.Username, s.creds.Password, "")
 
 	// You typically have one driver instance for the entire application. The
@@ -323,32 +273,6 @@ func (s *Server) RebuildDatabase() error {
 	return err
 }
 
-func (s *Server) RebuildMessageBus() error {
-	klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
-
-	// teardown
-	if s.rabbitConn != nil {
-		s.rabbitConn.Close()
-		s.rabbitConn = nil
-	}
-
-	// init rabbitmq
-	conn, err := amqp.Dial(s.options.RabbitMQURI)
-	if err != nil {
-		klog.V(1).Infof("amqp.Dial failed. Err: %v\n", err)
-		klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
-		return err
-	}
-
-	// save to pass onto instances
-	s.rabbitConn = conn
-
-	klog.V(4).Infof("Server.RebuildMessageBus Succeeded\n")
-	klog.V(6).Infof("Server.RebuildMessageBus LEAVE\n")
-
-	return nil
-}
-
 func (s *Server) RemoveConnection(uniqueId string) {
 	klog.V(6).Infof("Server.RemoveConnection ENTER\n")
 
@@ -368,7 +292,7 @@ func (s *Server) RemoveConnection(uniqueId string) {
 	}
 
 	// remove from record keeping
-	port := instance.Options.ProxyPort
+	port := instance.GetProxyPort()
 
 	delete(s.instanceById, uniqueId)
 	delete(s.instanceByPort, port)
@@ -381,15 +305,15 @@ func (s *Server) RemoveConnection(uniqueId string) {
 
 func (s *Server) CheckForDeadInstances() {
 	s.mu.Lock()
-	for _, instance := range s.instanceById {
+	for conversationId, instance := range s.instanceById {
 		if !instance.IsConnected() {
 			err := instance.Stop()
 			if err != nil {
 				klog.V(1).Infof("instance.Stop() failed. Err: %v\n", err)
 			}
 
-			delete(s.instanceById, instance.Options.ConversationId)
-			delete(s.instanceByPort, instance.Options.ProxyPort)
+			delete(s.instanceById, conversationId)
+			delete(s.instanceByPort, instance.GetProxyPort())
 		}
 	}
 	s.mu.Unlock()
@@ -410,22 +334,25 @@ func (s *Server) Stop() error {
 			klog.V(1).Infof("instance.Stop() failed. Err: %v\n", err)
 		}
 	}
-	s.instanceById = make(map[string]*instance.ServerInstance)
-	s.instanceByPort = make(map[int]*instance.ServerInstance)
+	s.instanceById = make(map[string]*instance.Proxy)
+	s.instanceByPort = make(map[int]*instance.Proxy)
 	s.mu.Unlock()
 
 	// clean up neo4j driver
-	ctx := context.Background()
-	(*s.driver).Close(ctx)
-
-	// clean up rabbitmq
-	s.rabbitConn.Close()
+	if s.driver != nil {
+		ctx := context.Background()
+		(*s.driver).Close(ctx)
+	}
+	s.driver = nil
 
 	// stop this endpoint
-	err := s.server.Close()
-	if err != nil {
-		klog.V(1).Infof("server.Close() failed. Err: %v\n", err)
+	if s.server != nil {
+		err := s.server.Close()
+		if err != nil {
+			klog.V(1).Infof("server.Close() failed. Err: %v\n", err)
+		}
 	}
+	s.server = nil
 
 	klog.V(4).Infof("Server.Stop Succeeded\n")
 	klog.V(6).Infof("Server.Stop LEAVE\n")

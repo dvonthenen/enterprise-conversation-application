@@ -9,8 +9,8 @@ import (
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	klog "k8s.io/klog/v2"
 
-	rabbitinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 )
 
 func NewNotificationManager(options NotificationManagerOption) *NotificationManager {
@@ -73,24 +73,31 @@ func (nm *NotificationManager) Init() error {
 		ctx := context.Background()
 		session := (*nm.driver).NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
 
-		// manager interface
-		var manager rabbitinterfaces.RabbitManagerHandler
-		manager = nm.rabbitManager
-
 		// signal
 		handler := myHandler.Func(HandlerOptions{
 			Session:     &session,
 			SymblClient: nm.symblClient,
-			Manager:     &manager,
+			Manager:     nm.rabbitManager,
 		})
 
-		_, err := nm.rabbitManager.CreateSubscriber(rabbitinterfaces.SubscriberOptions{
-			Name:    myHandler.Name,
-			Handler: handler,
+		_, err := (*nm.rabbitManager).CreateSubscriber(rabbitinterfaces.SubscriberOptions{
+			Name:        myHandler.Name,
+			Type:        rabbitinterfaces.ExchangeTypeFanout,
+			AutoDeleted: true,
+			IfUnused:    true,
+			NoWait:      true,
+			Handler:     handler,
 		})
 		if err != nil {
 			klog.V(1).Infof("CreateSubscription failed. Err: %v\n", err)
 		}
+	}
+
+	err := (*nm.rabbitManager).Init()
+	if err != nil {
+		klog.V(1).Infof("rabbitManager.Init failed. Err: %v\n", err)
+		klog.V(6).Infof("NotificationManager.Init LEAVE\n")
+		return err
 	}
 
 	klog.V(4).Infof("Init Succeeded\n")
@@ -99,42 +106,10 @@ func (nm *NotificationManager) Init() error {
 	return nil
 }
 
-func (nm *NotificationManager) Start() error {
-	klog.V(6).Infof("NotificationManager.Start ENTER\n")
-
-	err := nm.rabbitManager.Start()
-	if err != nil {
-		klog.V(1).Infof("rabbitManager.Start failed. Err: %v\n", err)
-		klog.V(6).Infof("NotificationManager.Start LEAVE\n")
-		return err
-	}
-
-	klog.V(4).Infof("Start Succeeded\n")
-	klog.V(6).Infof("NotificationManager.Start LEAVE\n")
-
-	return nil
-}
-
-func (nm *NotificationManager) Stop() error {
-	klog.V(6).Infof("NotificationManager.Stop ENTER\n")
-
-	err := nm.rabbitManager.Stop()
-	if err != nil {
-		klog.V(1).Infof("rabbitManager.Stop failed. Err: %v\n", err)
-		klog.V(6).Infof("NotificationManager.Stop LEAVE\n")
-		return err
-	}
-
-	klog.V(4).Infof("Stop Succeeded\n")
-	klog.V(6).Infof("NotificationManager.Stop LEAVE\n")
-
-	return nil
-}
-
 func (nm *NotificationManager) Teardown() error {
 	klog.V(6).Infof("NotificationManager.Teardown ENTER\n")
 
-	err := nm.rabbitManager.Teardown()
+	err := (*nm.rabbitManager).Teardown()
 	if err != nil {
 		klog.V(1).Infof("rabbitManager.Teardown failed. Err: %v\n", err)
 		klog.V(6).Infof("NotificationManager.Stop LEAVE\n")

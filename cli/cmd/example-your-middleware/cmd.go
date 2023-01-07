@@ -19,13 +19,13 @@ func main() {
 
 	// init
 	analyzer.Init(analyzer.EnterpriseInit{
-		LogLevel: analyzer.LogLevelStandard, // LogLevelStandard / LogLevelFull
+		LogLevel: analyzer.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace
 	})
 
 	analyzer, err := analyzer.New(analyzer.ServerOptions{
-		CrtFile:     "localhost.crt",
-		KeyFile:     "localhost.key",
-		RabbitMQURI: "amqp://guest:guest@localhost:5672",
+		CrtFile:   "localhost.crt",
+		KeyFile:   "localhost.key",
+		RabbitURI: "amqp://guest:guest@localhost:5672",
 	})
 	if err != nil {
 		fmt.Printf("analyzer.New failed. Err: %v\n", err)
@@ -40,6 +40,7 @@ func main() {
 	}
 
 	// start
+	fmt.Printf("Starting server...\n")
 	err = analyzer.Start()
 	if err != nil {
 		fmt.Printf("analyzer.Start() failed. Err: %v\n", err)
@@ -55,5 +56,5 @@ func main() {
 		fmt.Printf("analyzer.Stop() failed. Err: %v\n", err)
 	}
 
-	fmt.Printf("Succeeded!\n\n")
+	fmt.Printf("Server stopped...\n\n")
 }

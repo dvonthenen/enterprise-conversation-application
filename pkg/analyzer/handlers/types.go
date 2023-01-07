@@ -7,8 +7,7 @@ import (
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 
-	rabbit "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit"
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/analyzer/rabbit/interfaces"
+	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 )
 
 /*
@@ -17,49 +16,49 @@ import (
 type HandlerOptions struct {
 	Session     *neo4j.SessionWithContext // retrieve insights
 	SymblClient *symbl.RestClient
-	Manager     *interfaces.RabbitManagerHandler
+	Manager     *rabbitinterfaces.Manager
 }
 
 type ConversationInitHandler struct {
 	session     *neo4j.SessionWithContext
 	symblClient *symbl.RestClient
-	manager     *interfaces.RabbitManagerHandler
+	manager     *rabbitinterfaces.Manager
 }
 
 type EntityHandler struct {
 	session     *neo4j.SessionWithContext
 	symblClient *symbl.RestClient
-	manager     *interfaces.RabbitManagerHandler
+	manager     *rabbitinterfaces.Manager
 }
 
 type InsightHandler struct {
 	session     *neo4j.SessionWithContext
 	symblClient *symbl.RestClient
-	manager     *interfaces.RabbitManagerHandler
+	manager     *rabbitinterfaces.Manager
 }
 
 type MessageHandler struct {
 	session     *neo4j.SessionWithContext
 	symblClient *symbl.RestClient
-	manager     *interfaces.RabbitManagerHandler
+	manager     *rabbitinterfaces.Manager
 }
 
 type TopicHandler struct {
 	session     *neo4j.SessionWithContext
 	symblClient *symbl.RestClient
-	manager     *interfaces.RabbitManagerHandler
+	manager     *rabbitinterfaces.Manager
 }
 
 type TrackerHandler struct {
 	session     *neo4j.SessionWithContext
 	symblClient *symbl.RestClient
-	manager     *interfaces.RabbitManagerHandler
+	manager     *rabbitinterfaces.Manager
 }
 
 type ConversationTeardownHandler struct {
 	session     *neo4j.SessionWithContext
 	symblClient *symbl.RestClient
-	manager     *interfaces.RabbitManagerHandler
+	manager     *rabbitinterfaces.Manager
 }
 
 /*
@@ -67,7 +66,7 @@ type ConversationTeardownHandler struct {
 */
 type NotificationManagerOption struct {
 	Driver        *neo4j.DriverWithContext
-	RabbitManager *rabbit.RabbitManager
+	RabbitManager *rabbitinterfaces.Manager
 	SymblClient   *symbl.RestClient
 }
 
@@ -79,5 +78,5 @@ type NotificationManager struct {
 	symblClient *symbl.RestClient
 
 	// rabbit
-	rabbitManager *rabbit.RabbitManager
+	rabbitManager *rabbitinterfaces.Manager
 }

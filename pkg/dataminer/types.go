@@ -9,7 +9,6 @@ import (
 	"time"
 
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
-	amqp "github.com/rabbitmq/amqp091-go"
 
 	instance "github.com/dvonthenen/enterprise-reference-implementation/pkg/dataminer/instance"
 )
@@ -23,11 +22,11 @@ type Credentials struct {
 
 // ServerOptions for the main HTTP endpoint
 type ServerOptions struct {
-	CrtFile     string
-	KeyFile     string
-	StartPort   int
-	EndPort     int
-	RabbitMQURI string
+	CrtFile   string
+	KeyFile   string
+	StartPort int
+	EndPort   int
+	RabbitURI string
 }
 
 type Server struct {
@@ -36,8 +35,8 @@ type Server struct {
 	creds   Credentials
 
 	// bookkeeping
-	instanceById   map[string]*instance.ServerInstance
-	instanceByPort map[int]*instance.ServerInstance
+	instanceById   map[string]*instance.Proxy
+	instanceByPort map[int]*instance.Proxy
 	server         *http.Server
 	mu             sync.Mutex
 	ticker         *time.Ticker
@@ -46,6 +45,6 @@ type Server struct {
 	// neo4j
 	driver *neo4j.DriverWithContext
 
-	// rabbitmq
-	rabbitConn *amqp.Connection
+	// // rabbitmq
+	// rabbitMgr *rabbit.Manager
 }

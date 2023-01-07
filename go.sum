@@ -1,5 +1,17 @@
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230105035153-630ac32fe94d h1:/EtQueCCRnsYq/E30m7kLS6XFpOK7kqyzP1HEv2QTuw=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230105035153-630ac32fe94d/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230105052109-58c631804ee1 h1:Cq4PlXiJ1mgqHEuCysULetEEPer4jif+T0DUwQ685ts=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230105052109-58c631804ee1/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230105182035-6bec2ad29ed7 h1:ptxMsHkDBVogh8OQEhYdmzqLd5mbZmmzfNo9NVjWp3E=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230105182035-6bec2ad29ed7/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230106025357-d3b36554dd62 h1:PiMsXMw9MHyzeor4+L0MOsHsVnSCJsy8wPkGkq1eS+M=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230106025357-d3b36554dd62/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230106030424-2873235be901 h1:eutQUNS5MWPAzdcKK0/Vd7tW1xF40oOcLAiOci8Wn5o=
+github.com/dvonthenen/rabbitmq-manager v0.0.0-20230106030424-2873235be901/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
+github.com/dvonthenen/rabbitmq-manager v0.1.0 h1:rBAg5abP4WV916xpIIwoBcgSvdHpzopcyBmvSYJUFvw=
+github.com/dvonthenen/rabbitmq-manager v0.1.0/go.mod h1:6gbBj4toScVEa0drbEU+7yajmCXMfqfEwMsaXQ0vWvk=
 github.com/dvonthenen/sse/v2 v2.0.0-20221222171132-1daa5f8b774c h1:eu91E8j21DyoIXJyC9dNC5hSK2yrkmPzvh0t6zwQts0=
 github.com/dvonthenen/sse/v2 v2.0.0-20221222171132-1daa5f8b774c/go.mod h1:Igau6Whc+F17QUgML1fYe1VPZzTV6EMCnYktEmkNJ7I=
 github.com/dvonthenen/symbl-go-sdk v0.1.4-0.20221224023133-35e1f570ee05 h1:sr4Y9MoRb7zqFbvL5o5kV6RT2cVltVpgZ/EnrAi5wWY=
