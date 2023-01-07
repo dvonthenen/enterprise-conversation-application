@@ -52,7 +52,6 @@ func (ch ConversationInitHandler) ProcessMessage(byData []byte) error {
 		Name:        im.Message.Data.ConversationID,
 		AutoDeleted: true,
 		IfUnused:    true,
-		// NoWait:      true,
 	})
 	if err == nil {
 		klog.V(4).Infof("CreatePublisher succeeded\n")

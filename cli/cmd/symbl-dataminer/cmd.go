@@ -19,7 +19,7 @@ func main() {
 
 	// init
 	dataminer.Init(dataminer.EnterpriseInit{
-		LogLevel: dataminer.LogLevelTrace, // LogLevelStandard / LogLevelFull / LogLevelTrace
+		LogLevel: dataminer.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace
 	})
 
 	dataminer, err := dataminer.New(dataminer.ServerOptions{

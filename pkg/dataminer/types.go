@@ -44,7 +44,4 @@ type Server struct {
 
 	// neo4j
 	driver *neo4j.DriverWithContext
-
-	// // rabbitmq
-	// rabbitMgr *rabbit.Manager
 }

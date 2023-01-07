@@ -85,8 +85,7 @@ func (nm *NotificationManager) Init() error {
 			Type:        rabbitinterfaces.ExchangeTypeFanout,
 			AutoDeleted: true,
 			IfUnused:    true,
-			// NoWait:      true,
-			Handler: handler,
+			Handler:     handler,
 		})
 		if err != nil {
 			klog.V(1).Infof("CreateSubscription failed. Err: %v\n", err)
