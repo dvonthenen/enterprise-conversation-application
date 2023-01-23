@@ -25,7 +25,7 @@ In addition to the above characteristics, Enterprise-class features specifically
 
 This is a high-level block diagram, that satisfies the above characteristics, for what the architecture of an Enterprise Conversation could look like...
 
-![Enterprise Reference Architecture](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/images/enterprise-architecture.png)
+![Enterprise Reference Architecture](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-architecture.png?raw=true)
 
 Feature Benefits for this Enterprise Reference Architecture:
 
@@ -42,7 +42,7 @@ Feature Benefits for this Enterprise Reference Architecture:
 
 Given the architecture above, the code in this repository implements the following using the described software platform or components:
 
-![Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/images/enterprise-architecture-implementation.png)
+![Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-architecture-implementation.png?raw=true)
 
 ## How to Deploy this Enterprise Reference Implementation
 
