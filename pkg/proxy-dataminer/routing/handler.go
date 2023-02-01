@@ -454,7 +454,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 					"score":               topic.Score,
 					"type":                topic.Type,
 					"symbl_message_index": topic.MessageIndex,
-					"root_words":          convertRootWordToSlice(topic.RootWords),
+					"root_words":          convertRootWordToString(topic.RootWords),
 					"raw":                 string(data),
 				})
 				if err != nil {
@@ -482,12 +482,13 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 								x.lastAccessed = timestamp()
 							ON MATCH SET
 								x.lastAccessed = timestamp()
-						SET x = { #conversation_index#: $conversation_id }
+						SET x = { #conversation_index#: $conversation_id, value: $value }
 						`)
 					result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
 						"conversation_id": mh.conversationId,
 						"topic_id":        topic.ID,
 						"message_id":      ref.ID,
+						"value":           topic.Phrases,
 					})
 					if err != nil {
 						klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
@@ -991,10 +992,13 @@ func (mh *MessageHandler) handleInsight(insight *sdkinterfaces.Insight, squenceN
 	return nil
 }
 
-func convertRootWordToSlice(words []sdkinterfaces.RootWord) []string {
-	var arr []string
+func convertRootWordToString(words []sdkinterfaces.RootWord) string {
+	tmp := ""
 	for _, word := range words {
-		arr = append(arr, word.Text)
+		if len(tmp) > 0 {
+			tmp = "," + tmp
+		}
+		tmp = tmp + word.Text
 	}
-	return arr
+	return tmp
 }

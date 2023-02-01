@@ -25,11 +25,17 @@ type Data struct {
 	Message Message `json:"message,omitempty"`
 }
 
-type ClientTrackerMessage struct {
-	Type string `json:"type,omitempty"`
-	Data Data   `json:"data,omitempty"`
+type AppSpecificHistorical struct {
+	Type string  `json:"type,omitempty"`
+	Data []*Data `json:"data,omitempty"`
 }
 
-type ClientMessageType struct {
+/*
+	AppSpecificHistoricalType is just AppSpecificHistorical with the "Data" property removed from it.
+	This is simply just to pluck out the "Type" property in order to inspect the value.
+
+	This is only needed when using the Server Sent Events (SSE) mode for Application-level messages
+*/
+type AppSpecificHistoricalType struct {
 	Type string `json:"type,omitempty"`
 }

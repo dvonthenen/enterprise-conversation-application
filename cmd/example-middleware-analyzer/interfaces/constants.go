@@ -5,5 +5,6 @@ package interfaces
 
 const (
 	// user/app level notification messages
-	UserMessageTypeAssociation string = "message_association"
+	UserMessageTypeTrackerAssociation string = "message_tracker_association"
+	UserMessageTypeEntityAssociation  string = "message_entity_association"
 )

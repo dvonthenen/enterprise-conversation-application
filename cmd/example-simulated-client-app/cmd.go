@@ -30,8 +30,12 @@ func main() {
 	cfg.Speaker.Name = "Jane Doe"
 	cfg.Speaker.UserID = "jane.doe@mymail.com"
 
-	// if you wanted to something more meaningful with the output besides just print to the console,
-	// you would create your own message router instead of using the default one
+	/*
+		Using WebSocket based Application-Level messages is done here...
+
+		if you wanted to something more meaningful with the output besides just print to the console,
+		you would create your own implementation of a message router instead of using the default one
+	*/
 	router := streaming.NewDefaultMessageRouter()
 
 	options := symbl.StreamingOptions{
@@ -58,7 +62,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// client notifications using sse
+	/*
+		Using Server Sent Events (SSE) option
+
+		This is an example of would be how we would consume SSE events...
+	*/
 	// notificationURI := fmt.Sprintf("https://127.0.0.1/%s/notifications", conversationId)
 	// fmt.Printf("notificationURI: %s\n", notificationURI)
 	// notifications := sse.NewClient(notificationURI, func(c *sse.Client) {
