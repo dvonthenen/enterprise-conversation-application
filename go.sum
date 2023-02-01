@@ -6,6 +6,8 @@ github.com/dvonthenen/sse/v2 v2.0.0-20221222171132-1daa5f8b774c h1:eu91E8j21DyoI
 github.com/dvonthenen/sse/v2 v2.0.0-20221222171132-1daa5f8b774c/go.mod h1:Igau6Whc+F17QUgML1fYe1VPZzTV6EMCnYktEmkNJ7I=
 github.com/dvonthenen/symbl-go-sdk v0.1.4-0.20221224023133-35e1f570ee05 h1:sr4Y9MoRb7zqFbvL5o5kV6RT2cVltVpgZ/EnrAi5wWY=
 github.com/dvonthenen/symbl-go-sdk v0.1.4-0.20221224023133-35e1f570ee05/go.mod h1:Dw2W6FSawCqR01ebN4oJ3Y+/N8Yer88hBFkxrP9aZyw=
+github.com/dvonthenen/symbl-go-sdk v0.1.4 h1:lJP6CTcqo4cWqkmK6D57fjbVXur87wbTJAjPHpZbISE=
+github.com/dvonthenen/symbl-go-sdk v0.1.4/go.mod h1:Dw2W6FSawCqR01ebN4oJ3Y+/N8Yer88hBFkxrP9aZyw=
 github.com/dvonthenen/websocket v1.5.1-0.20221123154619-09865dbf1be2 h1:rsU8o6R7JTsP1c8WnXQhbaGRITJgL+SeDgc6zsFTfSU=
 github.com/dvonthenen/websocket v1.5.1-0.20221123154619-09865dbf1be2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/dvonthenen/websocketproxy v0.0.0-20230107052039-7dc48def251e h1:jx2Ir+dEAJtMRScWR16WdkcgYTYEzsqg+kzv/yiUQKI=
