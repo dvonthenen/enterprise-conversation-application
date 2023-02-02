@@ -10,7 +10,7 @@ GitHub repo: https://github.com/dvonthenen/enterprise-reference-implementation
 package sdk
 
 import (
-	_ "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-your-middleware"
+	_ "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-middleware-analyzer"
 	_ "github.com/dvonthenen/enterprise-reference-implementation/cmd/symbl-proxy-dataminer"
 	_ "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer"
 	_ "github.com/dvonthenen/enterprise-reference-implementation/pkg/proxy-dataminer"
