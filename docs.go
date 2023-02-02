@@ -1,5 +1,5 @@
-// Copyright 2022 Symbl.ai SDK contributors. All Rights Reserved.
-// SPDX-License-Identifier: MIT
+// Copyright 2023 Symbl.ai SDK contributors. All Rights Reserved.
+// SPDX-License-Identifier: Apache License 2.0
 
 /*
 Package provides reference implementation for Go to handle streaming
