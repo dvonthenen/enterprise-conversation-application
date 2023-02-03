@@ -4,6 +4,7 @@
 package instance
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,12 +12,13 @@ import (
 	rabbit "github.com/dvonthenen/rabbitmq-manager/pkg"
 	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	sdkinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
-	symblinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	prettyjson "github.com/hokaccha/go-prettyjson"
 	common "github.com/koding/websocketproxy/pkg/common"
 	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
 	sse "github.com/r3labs/sse/v2"
 	klog "k8s.io/klog/v2"
 
+	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
 	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/proxy-dataminer/routing"
 )
 
@@ -76,12 +78,17 @@ func (p *Proxy) Init() error {
 	}
 
 	// create message router
-	options := routing.MessageHandlerOptions{
-		ConversationId: p.options.ConversationId,
-		Neo4jMgr:       p.neo4jMgr,
-		RabbitMgr:      rabbitMgr,
-	}
-	messageMgr, err := routing.NewHandler(options)
+	var callback routing.MessagePassthrough
+	callback = p
+
+	messageMgr, err := routing.NewHandler(routing.MessageHandlerOptions{
+		ConversationId:       p.options.ConversationId,
+		TranscriptionEnabled: p.options.TranscriptionEnabled,
+		MessagingEnabled:     p.options.MessagingEnabled,
+		Neo4jMgr:             p.neo4jMgr,
+		RabbitMgr:            rabbitMgr,
+		Callback:             &callback,
+	})
 	if err != nil {
 		klog.V(1).Infof("routing.NewHandler failed. Err: %v\n", err)
 		klog.V(6).Infof("Proxy.Init LEAVE\n")
@@ -132,7 +139,7 @@ func (p *Proxy) Start() error {
 	symblServerFunc := func(stopChan chan struct{}) {
 		select {
 		default:
-			var callback symblinterfaces.InsightCallback
+			var callback sdkinterfaces.InsightCallback
 			callback = p.messageMgr
 
 			proxy := halfproxy.NewProxy(common.ProxyOptions{
@@ -242,6 +249,84 @@ func (p *Proxy) ProcessMessage(byData []byte) error {
 		klog.V(1).Infof("Unknown Message Type: %d\n", p.options.NotifyType)
 		return ErrUnknownNotifyType
 	}
+
+	return nil
+}
+
+/*
+	This provides the live voice-to-text word-for-word transcription usually
+	for display in the UI. A typical use case is displaying closed captioning
+	in a video conference window/widget/box/etc
+*/
+func (p *Proxy) SendRecognition(r *interfaces.UserDefinedRecognition) error {
+	klog.V(6).Infof("SendRecognition ENTER\n")
+
+	byData, err := json.Marshal(r)
+	if err != nil {
+		klog.V(1).Infof("json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("SendRecognition LEAVE\n")
+		return err
+	}
+
+	// pretty print
+	prettyJson, err := prettyjson.Format(byData)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("SendRecognition LEAVE\n")
+		return err
+	}
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(2).Infof("SendRecognition:\n%v\n\n", string(prettyJson))
+	klog.V(6).Infof("-------------------------------\n\n")
+
+	err = p.proxy.SendMessage(byData)
+	if err != nil {
+		klog.V(1).Infof("SendMessage failed. Err: %v\n", err)
+		klog.V(6).Infof("SendRecognition LEAVE\n")
+		return err
+	}
+
+	klog.V(4).Infof("SendRecognition Succeeded\n")
+	klog.V(6).Infof("SendRecognition LEAVE\n")
+
+	return nil
+}
+
+/*
+	This sends a completely transcribed sentence or collection of sentences
+	back to the client usually for display in the UI. A typical use case is
+	displaying completed sentences in a chat window/widget/box/etc
+*/
+func (p *Proxy) SendMessages(m *interfaces.UserDefinedMessages) error {
+	klog.V(6).Infof("SendMessages ENTER\n")
+
+	byData, err := json.Marshal(m)
+	if err != nil {
+		klog.V(1).Infof("json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("SendMessages LEAVE\n")
+		return err
+	}
+
+	// pretty print
+	prettyJson, err := prettyjson.Format(byData)
+	if err != nil {
+		klog.V(1).Infof("prettyjson.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("SendMessages LEAVE\n")
+		return err
+	}
+	klog.V(6).Infof("\n\n-------------------------------\n")
+	klog.V(2).Infof("SendMessages:\n%v\n\n", string(prettyJson))
+	klog.V(6).Infof("-------------------------------\n\n")
+
+	err = p.proxy.SendMessage(byData)
+	if err != nil {
+		klog.V(1).Infof("SendMessages failed. Err: %v\n", err)
+		klog.V(6).Infof("SendMessages LEAVE\n")
+		return err
+	}
+
+	klog.V(4).Infof("SendMessages Succeeded\n")
+	klog.V(6).Infof("SendMessages LEAVE\n")
 
 	return nil
 }

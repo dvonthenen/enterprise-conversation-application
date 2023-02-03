@@ -4,6 +4,9 @@
 package interfaces
 
 const (
+	// app specific message type
+	AppSpecificMessageTypeHistorical string = "historical"
+
 	// user/app level notification messages
 	UserMessageTypeTrackerAssociation string = "message_tracker_association"
 	UserMessageTypeEntityAssociation  string = "message_entity_association"

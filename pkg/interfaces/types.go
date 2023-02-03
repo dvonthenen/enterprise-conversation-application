@@ -3,47 +3,50 @@
 
 package interfaces
 
-import (
-	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
-)
+/*
+	Shared structs
+*/
+type From struct {
+	ID     string `json:"id,omitempty"`
+	Name   string `json:"name,omitempty"`
+	UserID string `json:"userId,omitempty"`
+}
+
+type Duration struct {
+	StartTime  string  `json:"startTime,omitempty"`
+	EndTime    string  `json:"endTime,omitempty"`
+	TimeOffset float64 `json:"timeOffset,omitempty"`
+	Duration   float64 `json:"duration,omitempty"`
+}
+
+type Recognition struct {
+	Type    string `json:"type,omitempty"`
+	IsFinal bool   `json:"isFinal,omitempty"`
+	From    From   `json:"user,omitempty"`
+	Content string `json:"transcript,omitempty"`
+}
+
+type Message struct {
+	From     From     `json:"from,omitempty"`
+	Content  string   `json:"content,omitempty"`
+	ID       string   `json:"id,omitempty"`
+	Duration Duration `json:"duration,omitempty"`
+}
+
+type Fragment struct {
+	Type     string    `json:"type"`
+	Messages []Message `json:"message,omitempty"`
+}
 
 /*
 	Conversation Insight with Metadata
 */
-type InitializationMessage struct {
-	interfaces.InitializationMessage
+type UserDefinedRecognition struct {
+	Type        string      `json:"type,omitempty"`
+	Recognition Recognition `json:"recognition,omitempty"`
 }
 
-type RecognitionResult struct {
-	ConversationID    string                        `json:"conversationId,omitempty"`
-	RecognitionResult *interfaces.RecognitionResult `json:"recognitionResult,omitempty"`
-}
-
-type MessageResponse struct {
-	ConversationID  string                      `json:"conversationId,omitempty"`
-	MessageResponse *interfaces.MessageResponse `json:"messageResponse,omitempty"`
-}
-
-type InsightResponse struct {
-	ConversationID  string                      `json:"conversationId,omitempty"`
-	InsightResponse *interfaces.InsightResponse `json:"insightResponse,omitempty"`
-}
-
-type TopicResponse struct {
-	ConversationID string                    `json:"conversationId,omitempty"`
-	TopicResponse  *interfaces.TopicResponse `json:"topicResponse,omitempty"`
-}
-
-type TrackerResponse struct {
-	ConversationID  string                      `json:"conversationId,omitempty"`
-	TrackerResponse *interfaces.TrackerResponse `json:"trackerResponse,omitempty"`
-}
-
-type EntityResponse struct {
-	ConversationID string                     `json:"conversationId,omitempty"`
-	EntityResponse *interfaces.EntityResponse `json:"entityResponse,omitempty"`
-}
-
-type TeardownMessage struct {
-	interfaces.TeardownMessage
+type UserDefinedMessages struct {
+	Type     string   `json:"type"`
+	Fragment Fragment `json:"fragment,omitempty"`
 }

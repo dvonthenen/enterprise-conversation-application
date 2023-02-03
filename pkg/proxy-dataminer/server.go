@@ -52,6 +52,17 @@ func New(options ServerOptions) (*Server, error) {
 		return nil, ErrInvalidInput
 	}
 
+	// options
+	if v := os.Getenv("ERI_TRANSCRIPTION"); v != "" {
+		klog.V(4).Info("ERI_TRANSCRIPTION found")
+		options.TranscriptionEnabled = StringParameterBoolValue(v)
+	}
+	if v := os.Getenv("ERI_MESSAGING"); v != "" {
+		klog.V(4).Info("ERI_MESSAGING found")
+		options.MessagingEnabled = StringParameterBoolValue(v)
+	}
+
+	// DB Creds
 	creds := Credentials{
 		ConnectionStr: connectionStr,
 		Username:      username,
@@ -75,12 +86,28 @@ func (s *Server) redirectProxy(w http.ResponseWriter, r *http.Request) {
 	conversationId := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 	klog.V(3).Infof("[redirectProxy] conversationId: %s\n", conversationId)
 
+	// display all application specific options
+	// for name, values := range r.Header {
+	// 	// Loop over all values for the name.
+	// 	for _, value := range values {
+	// 		klog.V(5).Infof("Key: %s = Value: %s\n", name, value)
+	// 	}
+	// }
+
 	// does the server already exist, return the serverInstance
 	serverInstance := s.instanceById[conversationId]
 	if serverInstance != nil {
 		klog.V(3).Infof("Server for conversationId (%s) already exists\n", conversationId)
 		http.Redirect(w, r, serverInstance.GetRedirectAddress(), http.StatusSeeOther)
 	}
+
+	// get HTTP header options
+	sTranscriptionHeaderValue := r.Header.Get("X-ERI-TRANSCRIPTION")
+	transcriptionEnable := s.options.TranscriptionEnabled || StringParameterBoolValue(sTranscriptionHeaderValue)
+
+	sMessagingHeaderValue := r.Header.Get("X-ERI-MESSAGING")
+	messagingEnable := s.options.MessagingEnabled || StringParameterBoolValue(sMessagingHeaderValue)
+	// http header
 
 	// Create a neo4j session to run transactions in. Sessions are lightweight to
 	// create and us. Sessions are NOT thread safe.
@@ -115,17 +142,19 @@ func (s *Server) redirectProxy(w http.ResponseWriter, r *http.Request) {
 	manager = s
 
 	server := instance.New(instance.ProxyOptions{
-		ConversationId:    conversationId,
-		RabbitURI:         s.options.RabbitURI,
-		ProxyPort:         random,
-		NotifyPort:        (random + DefaultNotificationPortOffset),
-		ProxyBindAddress:  newProxyServer,
-		NotifyBindAddress: newNotifyServer,
-		RedirectAddress:   newRedirect,
-		CrtFile:           s.options.CrtFile,
-		KeyFile:           s.options.KeyFile,
-		Neo4jMgr:          &session,
-		ProxyMgr:          &manager,
+		ConversationId:       conversationId,
+		RabbitURI:            s.options.RabbitURI,
+		ProxyPort:            random,
+		NotifyPort:           (random + DefaultNotificationPortOffset),
+		ProxyBindAddress:     newProxyServer,
+		NotifyBindAddress:    newNotifyServer,
+		RedirectAddress:      newRedirect,
+		CrtFile:              s.options.CrtFile,
+		KeyFile:              s.options.KeyFile,
+		TranscriptionEnabled: transcriptionEnable,
+		MessagingEnabled:     messagingEnable,
+		Neo4jMgr:             &session,
+		ProxyMgr:             &manager,
 	})
 
 	err := server.Init()
@@ -158,6 +187,14 @@ func (s *Server) redirectNotification(w http.ResponseWriter, r *http.Request) {
 	tokenCnt := len(split)
 	conversationId := split[tokenCnt-2]
 	klog.V(3).Infof("[redirectNotification] conversationId: %s\n", conversationId)
+
+	// display all application specific options
+	// for name, values := range r.Header {
+	// 	// Loop over all values for the name.
+	// 	for _, value := range values {
+	// 		klog.V(5).Infof("Key: %s = Value: %s\n", name, value)
+	// 	}
+	// }
 
 	// does the server already exist, return the serverInstance
 	serverInstance := s.instanceById[conversationId]
@@ -358,4 +395,9 @@ func (s *Server) Stop() error {
 	klog.V(6).Infof("Server.Stop LEAVE\n")
 
 	return nil
+}
+
+func StringParameterBoolValue(value string) bool {
+	lower := strings.ToLower(value)
+	return strings.EqualFold(lower, "true")
 }

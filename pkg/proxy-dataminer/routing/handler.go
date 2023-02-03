@@ -16,6 +16,8 @@ import (
 	klog "k8s.io/klog/v2"
 
 	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	shared "github.com/dvonthenen/enterprise-reference-implementation/pkg/shared"
+	utils "github.com/dvonthenen/enterprise-reference-implementation/pkg/utils"
 )
 
 func NewHandler(options MessageHandlerOptions) (*MessageHandler, error) {
@@ -26,6 +28,8 @@ func NewHandler(options MessageHandlerOptions) (*MessageHandler, error) {
 
 	mh := &MessageHandler{
 		conversationId: options.ConversationId,
+		callback:       options.Callback,
+		options:        options,
 		neo4jMgr:       options.Neo4jMgr,
 		rabbitMgr:      options.RabbitMgr,
 	}
@@ -50,7 +54,7 @@ func (mh *MessageHandler) Init() error {
 	// neo4j create conversation object
 	_, err = (*mh.neo4jMgr).ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
-			createConversationQuery := interfaces.ReplaceIndexes(`
+			createConversationQuery := utils.ReplaceIndexes(`
 				MERGE (c:Conversation { #conversation_index#: $conversation_id })
 					ON CREATE SET
 						c.created = timestamp(),
@@ -85,73 +89,73 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Setup Publishers...
 	*/
 	_, err := (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        interfaces.RabbitExchangeConversationInit,
+		Name:        shared.RabbitExchangeConversationInit,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeConversationInit, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeConversationInit, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        interfaces.RabbitExchangeMessage,
+		Name:        shared.RabbitExchangeMessage,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeMessage, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeMessage, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        interfaces.RabbitExchangeTopic,
+		Name:        shared.RabbitExchangeTopic,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeTopic, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeTopic, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        interfaces.RabbitExchangeTracker,
+		Name:        shared.RabbitExchangeTracker,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeTracker, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeTracker, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        interfaces.RabbitExchangeEntity,
+		Name:        shared.RabbitExchangeEntity,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeEntity, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeEntity, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        interfaces.RabbitExchangeInsight,
+		Name:        shared.RabbitExchangeInsight,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeInsight, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeInsight, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        interfaces.RabbitExchangeConversationTeardown,
+		Name:        shared.RabbitExchangeConversationTeardown,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", interfaces.RabbitExchangeConversationTeardown, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeConversationTeardown, err)
 		return err
 	}
 
@@ -191,7 +195,7 @@ func (mh *MessageHandler) InitializedConversation(im *sdkinterfaces.Initializati
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// rabbitmq
-	err = (*mh.rabbitMgr).PublishMessageByName(interfaces.RabbitExchangeConversationInit, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeConversationInit, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -214,12 +218,31 @@ func (mh *MessageHandler) RecognitionResultMessage(rr *sdkinterfaces.Recognition
 		klog.V(6).Infof("RecognitionResultMessage LEAVE\n")
 		return err
 	}
-
-	// We probably don't actually need this. Will just leave the debug statements here for future use
 	klog.V(6).Infof("\n\n-------------------------------\n")
-	klog.V(6).Infof("RecognitionResultMessage:\n%v\n\n", string(prettyJson))
-	klog.V(6).Infof("\nMessage:\n%v\n\n", rr.Message.Punctuated.Transcript)
+	klog.V(5).Infof("RecognitionResultMessage:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
+
+	// pass-through?
+	if mh.options.TranscriptionEnabled {
+		recognitionMsg := &interfaces.UserDefinedRecognition{
+			Type: interfaces.MessageTypeUserDefined,
+			Recognition: interfaces.Recognition{
+				Type:    rr.Message.Type,
+				IsFinal: rr.Message.IsFinal,
+				From: interfaces.From{
+					ID:     rr.Message.User.ID,
+					Name:   rr.Message.User.Name,
+					UserID: rr.Message.User.UserID,
+				},
+				Content: rr.Message.Punctuated.Transcript,
+			},
+		}
+
+		err := (*mh.callback).SendRecognition(recognitionMsg)
+		if err != nil {
+			klog.V(1).Infof("SendRecognition failed. Err: %v\n", err)
+		}
+	}
 
 	klog.V(4).Infof("RecognitionResultMessage Succeeded\n")
 	klog.V(6).Infof("RecognitionResultMessage LEAVE\n")
@@ -248,6 +271,40 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 	klog.V(2).Infof("MessageResponseMessage:\n%v\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
+	// pass-through?
+	if mh.options.TranscriptionEnabled {
+		recognitionMsg := &interfaces.UserDefinedMessages{
+			Type: interfaces.MessageTypeUserDefined,
+			Fragment: interfaces.Fragment{
+				Type:     mr.Type,
+				Messages: make([]interfaces.Message, 0),
+			},
+		}
+
+		for _, message := range mr.Messages {
+			recognitionMsg.Fragment.Messages = append(recognitionMsg.Fragment.Messages, interfaces.Message{
+				ID: message.ID,
+				From: interfaces.From{
+					ID:     message.From.ID,
+					Name:   message.From.Name,
+					UserID: message.From.UserID,
+				},
+				Content: message.Payload.Content,
+				Duration: interfaces.Duration{
+					StartTime:  message.Duration.StartTime,
+					EndTime:    message.Duration.EndTime,
+					TimeOffset: message.Duration.TimeOffset,
+					Duration:   message.Duration.Duration,
+				},
+			})
+		}
+
+		err := (*mh.callback).SendMessages(recognitionMsg)
+		if err != nil {
+			klog.V(1).Infof("SendMessages failed. Err: %v\n", err)
+		}
+	}
+
 	// write the object to the database
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -257,7 +314,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 	for _, message := range mr.Messages {
 		_, err := (*mh.neo4jMgr).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
-				createMessageToPeopleQuery := interfaces.ReplaceIndexes(`
+				createMessageToPeopleQuery := utils.ReplaceIndexes(`
 					MATCH (c:Conversation { #conversation_index#: $conversation_id })
 					MERGE (m:Message { #message_index#: $message_id })
 						ON CREATE SET
@@ -316,7 +373,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 	}
 
 	// rabbitmq
-	wrapperStruct := interfaces.MessageResponse{
+	wrapperStruct := shared.MessageResponse{
 		ConversationID:  mh.conversationId,
 		MessageResponse: mr,
 	}
@@ -328,7 +385,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(interfaces.RabbitExchangeMessage, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeMessage, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -379,7 +436,7 @@ func (mh *MessageHandler) InsightResponseMessage(ir *sdkinterfaces.InsightRespon
 	}
 
 	// rabbitmq
-	wrapperStruct := interfaces.InsightResponse{
+	wrapperStruct := shared.InsightResponse{
 		ConversationID:  mh.conversationId,
 		InsightResponse: ir,
 	}
@@ -391,7 +448,7 @@ func (mh *MessageHandler) InsightResponseMessage(ir *sdkinterfaces.InsightRespon
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(interfaces.RabbitExchangeInsight, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeInsight, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -430,7 +487,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 	for _, topic := range tr.Topics {
 		_, err := (*mh.neo4jMgr).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
-				createTopicsQuery := interfaces.ReplaceIndexes(`
+				createTopicsQuery := utils.ReplaceIndexes(`
 					MATCH (c:Conversation { #conversation_index#: $conversation_id })
 					MERGE (t:Topic { #topic_index#: $topic_id })
 						ON CREATE SET
@@ -473,7 +530,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 		for _, ref := range topic.MessageReferences {
 			_, err = (*mh.neo4jMgr).ExecuteWrite(ctx,
 				func(tx neo4j.ManagedTransaction) (any, error) {
-					createTopicsQuery := interfaces.ReplaceIndexes(`
+					createTopicsQuery := utils.ReplaceIndexes(`
 						MATCH (t:Topic { topicId: $topic_id })
 						MATCH (m:Message { #message_index#: $message_id })
 						MERGE (t)-[x:TOPIC_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
@@ -505,7 +562,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 	}
 
 	// rabbitmq
-	wrapperStruct := interfaces.TopicResponse{
+	wrapperStruct := shared.TopicResponse{
 		ConversationID: mh.conversationId,
 		TopicResponse:  tr,
 	}
@@ -517,7 +574,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(interfaces.RabbitExchangeTopic, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeTopic, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -558,7 +615,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 	for _, tracker := range tr.Trackers {
 		_, err := (*mh.neo4jMgr).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
-				createTrackersQuery := interfaces.ReplaceIndexes(`
+				createTrackersQuery := utils.ReplaceIndexes(`
 					MATCH (c:Conversation { #conversation_index#: $conversation_id })
 					MERGE (t:Tracker { #tracker_index#: $tracker_id })
 						ON CREATE SET
@@ -600,7 +657,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 			for _, msgRef := range match.MessageRefs {
 				_, err = (*mh.neo4jMgr).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
-						createTopicsQuery := interfaces.ReplaceIndexes(`
+						createTopicsQuery := utils.ReplaceIndexes(`
 							MATCH (t:Tracker { #tracker_index#: $tracker_id })
 							MATCH (m:Message { #message_index#: $message_id })
 							MERGE (t)-[x:TRACKER_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
@@ -634,7 +691,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 			for _, inRef := range match.InsightRefs {
 				_, err = (*mh.neo4jMgr).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
-						createTrackerMatchQuery := interfaces.ReplaceIndexes(`
+						createTrackerMatchQuery := utils.ReplaceIndexes(`
 							MATCH (t:Tracker { #tracker_index#: $tracker_id })
 							MATCH (i:Insight { #insight_index#: $insight_id })
 							MERGE (t)-[x:TRACKER_INSIGHT_REF { #conversation_index#: $conversation_id }]-(i)
@@ -667,7 +724,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 	}
 
 	// rabbitmq
-	wrapperStruct := interfaces.TrackerResponse{
+	wrapperStruct := shared.TrackerResponse{
 		ConversationID:  mh.conversationId,
 		TrackerResponse: tr,
 	}
@@ -679,7 +736,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(interfaces.RabbitExchangeTracker, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeTracker, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -726,7 +783,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 		// entity
 		_, err := (*mh.neo4jMgr).ExecuteWrite(ctx,
 			func(tx neo4j.ManagedTransaction) (any, error) {
-				createEntitiesQuery := interfaces.ReplaceIndexes(`
+				createEntitiesQuery := utils.ReplaceIndexes(`
 					MATCH (c:Conversation { #conversation_index#: $conversation_id })
 					MERGE (e:Entity { #entity_index#: $entity_id })
 						ON CREATE SET
@@ -770,7 +827,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 			for _, msgRef := range match.MessageRefs {
 				_, err = (*mh.neo4jMgr).ExecuteWrite(ctx,
 					func(tx neo4j.ManagedTransaction) (any, error) {
-						createEntitiesQuery := interfaces.ReplaceIndexes(`
+						createEntitiesQuery := utils.ReplaceIndexes(`
 							MATCH (e:Entity { #entity_index#: $entity_id })
 							MATCH (m:Message { #message_index#: $message_id })
 							MERGE (e)-[x:ENTITY_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
@@ -803,7 +860,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 	}
 
 	// rabbitmq
-	wrapperStruct := interfaces.EntityResponse{
+	wrapperStruct := shared.EntityResponse{
 		ConversationID: mh.conversationId,
 		EntityResponse: er,
 	}
@@ -815,7 +872,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(interfaces.RabbitExchangeEntity, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeEntity, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -857,7 +914,7 @@ func (mh *MessageHandler) TeardownConversation(tm *sdkinterfaces.TeardownMessage
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// rabbitmq
-	err = (*mh.rabbitMgr).PublishMessageByName(interfaces.RabbitExchangeConversationTeardown, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeConversationTeardown, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -931,7 +988,7 @@ func (mh *MessageHandler) handleInsight(insight *sdkinterfaces.Insight, squenceN
 	// for records, message := range mr.Messages {
 	_, err = (*mh.neo4jMgr).ExecuteWrite(ctx,
 		func(tx neo4j.ManagedTransaction) (any, error) {
-			createInsightQuery := interfaces.ReplaceIndexes(`
+			createInsightQuery := utils.ReplaceIndexes(`
 				MATCH (c:Conversation { #conversation_index#: $conversation_id })
 				MERGE (i:Insight { #insight_index#: $insight_id })
 					ON CREATE SET

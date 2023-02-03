@@ -26,6 +26,10 @@ type ProxyOptions struct {
 	NotifyPort        int
 	NotifyType        ClientNotifyType
 
+	// functionality
+	TranscriptionEnabled bool
+	MessagingEnabled     bool
+
 	// SSL Serve
 	CrtFile string
 	KeyFile string

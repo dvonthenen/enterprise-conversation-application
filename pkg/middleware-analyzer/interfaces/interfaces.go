@@ -4,7 +4,7 @@
 package interfaces
 
 import (
-	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	sdkinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 )
 
 /*
@@ -12,11 +12,11 @@ import (
 	As Symbl insights are receive from the platform, these callbacks will be invoked
 */
 type InsightCallback interface {
-	interfaces.InsightCallback
+	sdkinterfaces.InsightCallback
 
 	/*
 		The Client Publisher interface will be set before messages trigger functions in the
-		interfaces.InsightCallback
+		sdkinterfaces.InsightCallback
 	*/
 	SetClientPublisher(mp *MessagePublisher)
 }

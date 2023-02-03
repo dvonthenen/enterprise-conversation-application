@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"time"
@@ -15,15 +16,25 @@ import (
 	streaming "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1"
 	microphone "github.com/dvonthenen/symbl-go-sdk/pkg/audio/microphone"
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
+	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/client/interfaces"
 	// sse "github.com/r3labs/sse/v2"
 )
 
+type HeadersContext struct{}
+
 func main() {
+	// init
 	symbl.Init(symbl.SybmlInit{
-		LogLevel: symbl.LogLevelStandard, // LogLevelStandard / LogLevelFull
+		LogLevel: symbl.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace
 	})
 
 	ctx := context.Background()
+
+	// custom headers to enable options
+	headers := http.Header{}
+	headers.Add("X-ERI-TRANSCRIPTION", "true")
+	headers.Add("X-ERI-MESSAGING", "true")
+	ctx = interfaces.WithCustomHeaders(ctx, headers)
 
 	// create a new websocket/streaming client
 	cfg := symbl.GetDefaultConfig()
