@@ -10,7 +10,7 @@ import (
 	prettyjson "github.com/hokaccha/go-prettyjson"
 	klog "k8s.io/klog/v2"
 
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	shared "github.com/dvonthenen/enterprise-reference-implementation/pkg/shared"
 )
 
 func NewTopicHandler(options HandlerOptions) *rabbitinterfaces.RabbitMessageHandler {
@@ -34,7 +34,7 @@ func (th TopicHandler) ProcessMessage(byData []byte) error {
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// reform struct
-	var tr interfaces.TopicResponse
+	var tr shared.TopicResponse
 	err = json.Unmarshal(byData, &tr)
 	if err != nil {
 		klog.V(1).Infof("[TopicHandler] json.Unmarshal failed. Err: %v\n", err)

@@ -8,9 +8,9 @@ import (
 	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	klog "k8s.io/klog/v2"
 
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
 	middlewareinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer/interfaces"
 	router "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer/router"
+	shared "github.com/dvonthenen/enterprise-reference-implementation/pkg/shared"
 )
 
 func NewMiddlewareAnalyzer(options MiddlewareAnalyzerOption) (*MiddlewareAnalyzer, error) {
@@ -56,31 +56,31 @@ func (ma *MiddlewareAnalyzer) Init() error {
 	// init rabbit clients
 	myHandlers := make([]*MyHandler, 0)
 	myHandlers = append(myHandlers, &MyHandler{
-		Name: interfaces.RabbitExchangeConversationInit,
+		Name: shared.RabbitExchangeConversationInit,
 		Func: router.NewConversationInitHandler,
 	})
 	myHandlers = append(myHandlers, &MyHandler{
-		Name: interfaces.RabbitExchangeEntity,
+		Name: shared.RabbitExchangeEntity,
 		Func: router.NewEntityHandler,
 	})
 	myHandlers = append(myHandlers, &MyHandler{
-		Name: interfaces.RabbitExchangeInsight,
+		Name: shared.RabbitExchangeInsight,
 		Func: router.NewInsightHandler,
 	})
 	myHandlers = append(myHandlers, &MyHandler{
-		Name: interfaces.RabbitExchangeMessage,
+		Name: shared.RabbitExchangeMessage,
 		Func: router.NewMessageHandler,
 	})
 	myHandlers = append(myHandlers, &MyHandler{
-		Name: interfaces.RabbitExchangeTopic,
+		Name: shared.RabbitExchangeTopic,
 		Func: router.NewTopicHandler,
 	})
 	myHandlers = append(myHandlers, &MyHandler{
-		Name: interfaces.RabbitExchangeTracker,
+		Name: shared.RabbitExchangeTracker,
 		Func: router.NewTrackerHandler,
 	})
 	myHandlers = append(myHandlers, &MyHandler{
-		Name: interfaces.RabbitExchangeConversationTeardown,
+		Name: shared.RabbitExchangeConversationTeardown,
 		Func: router.NewConversationTeardownHandler,
 	})
 

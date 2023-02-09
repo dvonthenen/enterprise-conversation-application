@@ -22,11 +22,13 @@ type Credentials struct {
 
 // ServerOptions for the main HTTP endpoint
 type ServerOptions struct {
-	CrtFile   string
-	KeyFile   string
-	StartPort int
-	EndPort   int
-	RabbitURI string
+	CrtFile              string
+	KeyFile              string
+	StartPort            int
+	EndPort              int
+	RabbitURI            string
+	TranscriptionEnabled bool
+	MessagingEnabled     bool
 }
 
 type Server struct {

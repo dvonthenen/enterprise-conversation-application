@@ -25,9 +25,14 @@ type Data struct {
 	Message Message `json:"message,omitempty"`
 }
 
+type Historical struct {
+	Type string `json:"type,omitempty"`
+	Data []Data `json:"data,omitempty"`
+}
+
 type AppSpecificHistorical struct {
-	Type string  `json:"type,omitempty"`
-	Data []*Data `json:"data,omitempty"`
+	Type       string     `json:"type"`
+	Historical Historical `json:"historical,omitempty"`
 }
 
 /*

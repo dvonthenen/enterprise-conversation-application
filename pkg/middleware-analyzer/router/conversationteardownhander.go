@@ -10,7 +10,7 @@ import (
 	prettyjson "github.com/hokaccha/go-prettyjson"
 	klog "k8s.io/klog/v2"
 
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	shared "github.com/dvonthenen/enterprise-reference-implementation/pkg/shared"
 )
 
 func NewConversationTeardownHandler(options HandlerOptions) *rabbitinterfaces.RabbitMessageHandler {
@@ -34,7 +34,7 @@ func (ch ConversationTeardownHandler) ProcessMessage(byData []byte) error {
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// reform struct
-	var tm interfaces.TeardownMessage
+	var tm shared.TeardownMessage
 	err = json.Unmarshal(byData, &tm)
 	if err != nil {
 		klog.V(1).Infof("[TeardownHandler] json.Unmarshal failed. Err: %v\n", err)

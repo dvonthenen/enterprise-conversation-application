@@ -4,12 +4,12 @@ go 1.18
 
 require (
 	github.com/dvonthenen/rabbitmq-manager v0.1.1
-	github.com/dvonthenen/symbl-go-sdk v0.1.4
+	github.com/dvonthenen/symbl-go-sdk v0.1.5-0.20230209154332-b0916120e2bf
 	github.com/hokaccha/go-prettyjson v0.0.0-20211117102719-0474bc63780f
 	github.com/koding/websocketproxy v0.0.0-20181220232114-7ed82d81a28c
 	github.com/neo4j/neo4j-go-driver/v5 v5.3.0
 	github.com/r3labs/sse/v2 v2.9.0
-	k8s.io/klog/v2 v2.80.1
+	k8s.io/klog/v2 v2.90.0
 )
 
 require (
@@ -31,12 +31,12 @@ require (
 )
 
 replace (
-	github.com/gorilla/websocket => github.com/dvonthenen/websocket v1.5.1-0.20221123154619-09865dbf1be2
-	github.com/koding/websocketproxy => github.com/dvonthenen/websocketproxy v0.0.0-20230107052039-7dc48def251e
+	github.com/gorilla/websocket => github.com/dvonthenen/websocket v1.5.1-0.20230208185225-642cd054e185
+	github.com/koding/websocketproxy => github.com/dvonthenen/websocketproxy v0.0.0-20230208215838-876380a51a16
 	github.com/r3labs/sse/v2 => github.com/dvonthenen/sse/v2 v2.0.0-20221222171132-1daa5f8b774c
 )
 
 // replace github.com/dvonthenen/symbl-go-sdk => ../../dvonthenen/symbl-go-sdk
-// replace github.com/dvonthenen/websocket => ../../dvonthenen/websocket
+// replace github.com/dvonthenen/websocket => ../../gorilla/websocket
 // replace github.com/dvonthenen/websocketproxy => ../../koding/websocketproxy
 // replace github.com/dvonthenen/sse => ../../r3labs/sse
