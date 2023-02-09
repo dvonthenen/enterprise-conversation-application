@@ -84,10 +84,10 @@ func (h *Handler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) error {
 
 					msg = &interfaces.AppSpecificHistorical{
 						Type: sdkinterfaces.MessageTypeUserDefined,
-						Historical: interfaces.Historical{
+						Metadata: interfaces.Metadata{
 							Type: interfaces.AppSpecificMessageTypeHistorical,
-							Data: make([]interfaces.Data, 0),
 						},
+						Historical: make([]interfaces.Data, 0),
 					}
 					atLeastOnce = true
 				}
@@ -116,7 +116,7 @@ func (h *Handler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) error {
 					content += contentTmp
 				}
 
-				msg.Historical.Data = append(msg.Historical.Data, interfaces.Data{
+				msg.Historical = append(msg.Historical, interfaces.Data{
 					Type: interfaces.UserMessageTypeEntityAssociation,
 					Author: interfaces.Author{
 						Name:  user.Props["name"].(string),
@@ -194,10 +194,10 @@ func (h *Handler) TrackerResponseMessage(tr *sdkinterfaces.TrackerResponse) erro
 
 					msg = &interfaces.AppSpecificHistorical{
 						Type: sdkinterfaces.MessageTypeUserDefined,
-						Historical: interfaces.Historical{
+						Metadata: interfaces.Metadata{
 							Type: interfaces.AppSpecificMessageTypeHistorical,
-							Data: make([]interfaces.Data, 0),
 						},
+						Historical: make([]interfaces.Data, 0),
 					}
 					atLeastOnceMessage = true
 				}
@@ -213,7 +213,7 @@ func (h *Handler) TrackerResponseMessage(tr *sdkinterfaces.TrackerResponse) erro
 
 				for _, match := range curTracker.Matches {
 					for _, refs := range match.MessageRefs {
-						msg.Historical.Data = append(msg.Historical.Data, interfaces.Data{
+						msg.Historical = append(msg.Historical, interfaces.Data{
 							Type: interfaces.UserMessageTypeTrackerAssociation,
 							Author: interfaces.Author{
 								Name:  user.Props["name"].(string),
@@ -265,10 +265,10 @@ func (h *Handler) TrackerResponseMessage(tr *sdkinterfaces.TrackerResponse) erro
 
 					msg = &interfaces.AppSpecificHistorical{
 						Type: sdkinterfaces.MessageTypeUserDefined,
-						Historical: interfaces.Historical{
+						Metadata: interfaces.Metadata{
 							Type: interfaces.AppSpecificMessageTypeHistorical,
-							Data: make([]interfaces.Data, 0),
 						},
+						Historical: make([]interfaces.Data, 0),
 					}
 					atLeastOnceInsight = true
 				}
@@ -286,7 +286,7 @@ func (h *Handler) TrackerResponseMessage(tr *sdkinterfaces.TrackerResponse) erro
 					for _, refs := range match.InsightRefs {
 						// send a message per match
 
-						msg.Historical.Data = append(msg.Historical.Data, interfaces.Data{
+						msg.Historical = append(msg.Historical, interfaces.Data{
 							Type: interfaces.UserMessageTypeTrackerAssociation,
 							Author: interfaces.Author{
 								Name:  user.Props["name"].(string),
@@ -339,94 +339,98 @@ func (h *Handler) EntityResponseMessage(er *sdkinterfaces.EntityResponse) error 
 	ctx := context.Background()
 
 	for _, entity := range er.Entities {
-		// housekeeping
-		atLeastOnce := false
-		var msg *interfaces.AppSpecificHistorical
+		for _, match := range entity.Matches {
+			// housekeeping
+			atLeastOnce := false
+			var msg *interfaces.AppSpecificHistorical
 
-		// get past instances
-		_, err := (*h.session).ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-			myQuery := utils.ReplaceIndexes(`
-				MATCH (e:Entity)-[x:ENTITY_MESSAGE_REF]-(m:Message)-[y:SPOKE]-(u:User)
-				WHERE x.#conversation_index# <> $conversation_id AND y.#conversation_index# <> $conversation_id AND e.type = $entity_type AND e.subType = $entity_subtype
-				RETURN e, x, m, y, u ORDER BY x.created DESC LIMIT 5`)
-			result, err := tx.Run(ctx, myQuery, map[string]any{
-				"conversation_id": h.conversationID,
-				"entity_type":     entity.Type,
-				"entity_subtype":  entity.SubType,
+			// get past instances
+			_, err := (*h.session).ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+				myQuery := utils.ReplaceIndexes(`
+					MATCH (e:Entity)-[x:ENTITY_MESSAGE_REF]-(m:Message)-[y:SPOKE]-(u:User)
+					WHERE x.#conversation_index# <> $conversation_id AND y.#conversation_index# <> $conversation_id AND e.category = $entity_category AND e.type = $entity_type AND e.subType = $entity_subtype AND e.value = $entity_value
+					RETURN e, x, m, y, u ORDER BY x.created DESC LIMIT 5`)
+				result, err := tx.Run(ctx, myQuery, map[string]any{
+					"conversation_id": h.conversationID,
+					"entity_category": entity.Category,
+					"entity_type":     entity.Type,
+					"entity_subtype":  entity.SubType,
+					"entity_value":    match.DetectedValue,
+				})
+				if err != nil {
+					return nil, err
+				}
+
+				for result.Next(ctx) {
+					// only init once!
+					if !atLeastOnce {
+						klog.V(2).Infof("Check Previous Entities\n")
+						klog.V(2).Infof("----------------------------------------\n")
+
+						msg = &interfaces.AppSpecificHistorical{
+							Type: sdkinterfaces.MessageTypeUserDefined,
+							Metadata: interfaces.Metadata{
+								Type: interfaces.AppSpecificMessageTypeHistorical,
+							},
+							Historical: make([]interfaces.Data, 0),
+						}
+						atLeastOnce = true
+					}
+
+					message := result.Record().Values[2].(neo4j.Node)
+					relationship := result.Record().Values[1].(neo4j.Relationship)
+					user := result.Record().Values[4].(neo4j.Node)
+
+					klog.V(2).Infof("Previous Entity\n")
+					klog.V(2).Infof("Author: %s / %s\n", user.Props["name"].(string), user.Props["email"].(string))
+					klog.V(2).Infof("Entity Match: %s\n", relationship.Props["value"].(string))
+					klog.V(2).Infof("Corresponding sentence: %s\n", message.Props["content"].(string))
+
+					for _, match := range entity.Matches {
+						for _, refs := range match.MessageRefs {
+							msg.Historical = append(msg.Historical, interfaces.Data{
+								Type: interfaces.UserMessageTypeEntityAssociation,
+								Author: interfaces.Author{
+									Name:  user.Props["name"].(string),
+									Email: user.Props["email"].(string),
+								},
+								Message: interfaces.Message{
+									Correlation:     fmt.Sprintf("%s/%s/%s", entity.Category, entity.Type, entity.SubType),
+									CurrentContent:  refs.Text,
+									CurrentMatch:    match.DetectedValue,
+									PreviousContent: message.Props["content"].(string),
+									PreviousMatch:   relationship.Props["value"].(string),
+								},
+							})
+						}
+					}
+				}
+
+				if atLeastOnce {
+					klog.V(2).Infof("----------------------------------------\n")
+				}
+
+				return nil, result.Err()
 			})
 			if err != nil {
-				return nil, err
+				klog.V(1).Infof("[Entities] ExecuteRead failed. Err: %v\n", err)
+				return err
 			}
 
-			for result.Next(ctx) {
-				// only init once!
-				if !atLeastOnce {
-					klog.V(2).Infof("Check Previous Entities\n")
-					klog.V(2).Infof("----------------------------------------\n")
-
-					msg = &interfaces.AppSpecificHistorical{
-						Type: sdkinterfaces.MessageTypeUserDefined,
-						Historical: interfaces.Historical{
-							Type: interfaces.AppSpecificMessageTypeHistorical,
-							Data: make([]interfaces.Data, 0),
-						},
-					}
-					atLeastOnce = true
-				}
-
-				message := result.Record().Values[2].(neo4j.Node)
-				relationship := result.Record().Values[1].(neo4j.Relationship)
-				user := result.Record().Values[4].(neo4j.Node)
-
-				klog.V(2).Infof("Previous Entity\n")
-				klog.V(2).Infof("Author: %s / %s\n", user.Props["name"].(string), user.Props["email"].(string))
-				klog.V(2).Infof("Entity Match: %s\n", relationship.Props["value"].(string))
-				klog.V(2).Infof("Corresponding sentence: %s\n", message.Props["content"].(string))
-
-				for _, match := range entity.Matches {
-					for _, refs := range match.MessageRefs {
-						msg.Historical.Data = append(msg.Historical.Data, interfaces.Data{
-							Type: interfaces.UserMessageTypeEntityAssociation,
-							Author: interfaces.Author{
-								Name:  user.Props["name"].(string),
-								Email: user.Props["email"].(string),
-							},
-							Message: interfaces.Message{
-								Correlation:     fmt.Sprintf("%s/%s", entity.Type, entity.SubType),
-								CurrentContent:  refs.Text,
-								CurrentMatch:    match.DetectedValue,
-								PreviousContent: message.Props["content"].(string),
-								PreviousMatch:   relationship.Props["value"].(string),
-							},
-						})
-					}
-				}
-			}
-
+			/*
+				If there is at least one Message or Insight that has triggered this Tracker, then
+				send your High-level Application message back to the Dataminer component
+			*/
 			if atLeastOnce {
-				klog.V(2).Infof("----------------------------------------\n")
-			}
+				data, err := json.Marshal(*msg)
+				if err != nil {
+					klog.V(1).Infof("[Entities] json.Marshal failed. Err: %v\n", err)
+				}
 
-			return nil, result.Err()
-		})
-		if err != nil {
-			klog.V(1).Infof("[Entities] ExecuteRead failed. Err: %v\n", err)
-			return err
-		}
-
-		/*
-			If there is at least one Message or Insight that has triggered this Tracker, then
-			send your High-level Application message back to the Dataminer component
-		*/
-		if atLeastOnce {
-			data, err := json.Marshal(*msg)
-			if err != nil {
-				klog.V(1).Infof("[Entities] json.Marshal failed. Err: %v\n", err)
-			}
-
-			err = (*h.msgPublisher).PublishMessage(h.conversationID, data)
-			if err != nil {
-				klog.V(1).Infof("[Entities] PublishMessage failed. Err: %v\n", err)
+				err = (*h.msgPublisher).PublishMessage(h.conversationID, data)
+				if err != nil {
+					klog.V(1).Infof("[Entities] PublishMessage failed. Err: %v\n", err)
+				}
 			}
 		}
 	}
@@ -445,9 +449,9 @@ func (h *Handler) UserDefinedMessage(data []byte) error {
 }
 
 func (h *Handler) UnhandledMessage(byMsg []byte) error {
-	klog.V(1).Infof("\n\n-------------------------------\n")
-	klog.V(1).Infof("UnhandledMessage:\n%v\n", string(byMsg))
-	klog.V(1).Infof("-------------------------------\n\n")
+	klog.Errorf("\n\n-------------------------------\n")
+	klog.Errorf("UnhandledMessage:\n%v\n", string(byMsg))
+	klog.Errorf("-------------------------------\n\n")
 	return ErrUnhandledMessage
 }
 

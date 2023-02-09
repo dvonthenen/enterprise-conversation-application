@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
@@ -57,10 +58,10 @@ func (mh *MessageHandler) Init() error {
 			createConversationQuery := utils.ReplaceIndexes(`
 				MERGE (c:Conversation { #conversation_index#: $conversation_id })
 					ON CREATE SET
-						c.created = timestamp(),
-						c.lastAccessed = timestamp()
+						c.created = datetime(),
+						c.lastAccessed = datetime()
 					ON MATCH SET
-						c.lastAccessed = timestamp()
+						c.lastAccessed = datetime()
 				SET c = { #conversation_index#: $conversation_id }
 				`)
 			result, err := tx.Run(ctx, createConversationQuery, map[string]any{
@@ -226,8 +227,10 @@ func (mh *MessageHandler) RecognitionResultMessage(rr *sdkinterfaces.Recognition
 	if mh.options.TranscriptionEnabled {
 		recognitionMsg := &interfaces.UserDefinedRecognition{
 			Type: interfaces.MessageTypeUserDefined,
+			Metadata: interfaces.Metadata{
+				Type: rr.Message.Type,
+			},
 			Recognition: interfaces.Recognition{
-				Type:    rr.Message.Type,
 				IsFinal: rr.Message.IsFinal,
 				From: interfaces.From{
 					ID:     rr.Message.User.ID,
@@ -275,14 +278,14 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 	if mh.options.TranscriptionEnabled {
 		recognitionMsg := &interfaces.UserDefinedMessages{
 			Type: interfaces.MessageTypeUserDefined,
-			Fragment: interfaces.Fragment{
-				Type:     mr.Type,
-				Messages: make([]interfaces.Message, 0),
+			Metadata: interfaces.Metadata{
+				Type: mr.Type,
 			},
+			Messages: make([]interfaces.Message, 0),
 		}
 
 		for _, message := range mr.Messages {
-			recognitionMsg.Fragment.Messages = append(recognitionMsg.Fragment.Messages, interfaces.Message{
+			recognitionMsg.Messages = append(recognitionMsg.Messages, interfaces.Message{
 				ID: message.ID,
 				From: interfaces.From{
 					ID:     message.From.ID,
@@ -318,31 +321,31 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 					MATCH (c:Conversation { #conversation_index#: $conversation_id })
 					MERGE (m:Message { #message_index#: $message_id })
 						ON CREATE SET
-							m.created = timestamp(),
-							m.lastAccessed = timestamp()
+							m.created = datetime(),
+							m.lastAccessed = datetime()
 						ON MATCH SET
-							m.lastAccessed = timestamp()
+							m.lastAccessed = datetime()
 					SET m = { #message_index#: $message_id, content: $content, startTime: $start_time, endTime: $end_time, timeOffset: $time_offset, duration: $duration, sequenceNumber: $sequence_number, raw: $raw }
 					MERGE (u:User { #user_index#: $user_id })
 						ON CREATE SET
-							u.created = timestamp(),
-							u.lastAccessed = timestamp()
+							u.created = datetime(),
+							u.lastAccessed = datetime()
 						ON MATCH SET
-							u.lastAccessed = timestamp()
+							u.lastAccessed = datetime()
 					SET u = { realId: $user_real_id, #user_index#: $user_id, name: $user_name, email: $user_id }
 					MERGE (c)-[x:MESSAGES { #conversation_index#: $conversation_id }]-(m)
 						ON CREATE SET
-							x.created = timestamp(),
-							x.lastAccessed = timestamp()
+							x.created = datetime(),
+							x.lastAccessed = datetime()
 						ON MATCH SET
-							x.lastAccessed = timestamp()
+							x.lastAccessed = datetime()
 					SET x = { #conversation_index#: $conversation_id }
 					MERGE (m)-[y:SPOKE { #conversation_index#: $conversation_id }]-(u)
 						ON CREATE SET
-							y.created = timestamp(),
-							y.lastAccessed = timestamp()
+							y.created = datetime(),
+							y.lastAccessed = datetime()
 						ON MATCH SET
-							y.lastAccessed = timestamp()
+							y.lastAccessed = datetime()
 					SET y = { #conversation_index#: $conversation_id }
 					`)
 				result, err := tx.Run(ctx, createMessageToPeopleQuery, map[string]any{
@@ -491,17 +494,17 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 					MATCH (c:Conversation { #conversation_index#: $conversation_id })
 					MERGE (t:Topic { #topic_index#: $topic_id })
 						ON CREATE SET
-							t.created = timestamp(),
-							t.lastAccessed = timestamp()
+							t.created = datetime(),
+							t.lastAccessed = datetime()
 						ON MATCH SET
-							t.lastAccessed = timestamp()
+							t.lastAccessed = datetime()
 					SET t = { #topic_index#: $topic_id, phrases: $phrases, score: $score, type: $type, messageIndex: $symbl_message_index, rootWords: $root_words, raw: $raw }
 					MERGE (c)-[x:TOPICS { #conversation_index#: $conversation_id }]-(t)
 						ON CREATE SET
-							x.created = timestamp(),
-							x.lastAccessed = timestamp()
+							x.created = datetime(),
+							x.lastAccessed = datetime()
 						ON MATCH SET
-							x.lastAccessed = timestamp()
+							x.lastAccessed = datetime()
 					SET x = { #conversation_index#: $conversation_id }
 					`)
 				result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
@@ -535,10 +538,10 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 						MATCH (m:Message { #message_index#: $message_id })
 						MERGE (t)-[x:TOPIC_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
 							ON CREATE SET
-								x.created = timestamp(),
-								x.lastAccessed = timestamp()
+								x.created = datetime(),
+								x.lastAccessed = datetime()
 							ON MATCH SET
-								x.lastAccessed = timestamp()
+								x.lastAccessed = datetime()
 						SET x = { #conversation_index#: $conversation_id, value: $value }
 						`)
 					result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
@@ -619,17 +622,17 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 					MATCH (c:Conversation { #conversation_index#: $conversation_id })
 					MERGE (t:Tracker { #tracker_index#: $tracker_id })
 						ON CREATE SET
-							t.created = timestamp(),
-							t.lastAccessed = timestamp()
+							t.created = datetime(),
+							t.lastAccessed = datetime()
 						ON MATCH SET
-							t.lastAccessed = timestamp()
+							t.lastAccessed = datetime()
 					SET t = { #tracker_index#: $tracker_id, name: $tracker_name, raw: $raw }
 					MERGE (c)-[x:TRACKER { #conversation_index#: $conversation_id }]-(t)
 						ON CREATE SET
-							x.created = timestamp(),
-							x.lastAccessed = timestamp()
+							x.created = datetime(),
+							x.lastAccessed = datetime()
 						ON MATCH SET
-							x.lastAccessed = timestamp()
+							x.lastAccessed = datetime()
 					SET x = { #conversation_index#: $conversation_id }
 					`)
 				result, err := tx.Run(ctx, createTrackersQuery, map[string]any{
@@ -662,10 +665,10 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 							MATCH (m:Message { #message_index#: $message_id })
 							MERGE (t)-[x:TRACKER_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
 								ON CREATE SET
-									x.created = timestamp(),
-									x.lastAccessed = timestamp()
+									x.created = datetime(),
+									x.lastAccessed = datetime()
 								ON MATCH SET
-									x.lastAccessed = timestamp()
+									x.lastAccessed = datetime()
 							SET x = { #conversation_index#: $conversation_id, value: $value }
 							`)
 						result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
@@ -696,10 +699,10 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 							MATCH (i:Insight { #insight_index#: $insight_id })
 							MERGE (t)-[x:TRACKER_INSIGHT_REF { #conversation_index#: $conversation_id }]-(i)
 								ON CREATE SET
-									x.created = timestamp(),
-									x.lastAccessed = timestamp()
+									x.created = datetime(),
+									x.lastAccessed = datetime()
 								ON MATCH SET
-									x.lastAccessed = timestamp()
+									x.lastAccessed = datetime()
 							SET x = { #conversation_index#: $conversation_id, value: $value }
 							`)
 						result, err := tx.Run(ctx, createTrackerMatchQuery, map[string]any{
@@ -777,51 +780,56 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 
 	for _, entity := range er.Entities {
 
-		// entity id
-		entityId := fmt.Sprintf("%s_%s_%s", entity.Type, entity.SubType, entity.Category)
-
-		// entity
-		_, err := (*mh.neo4jMgr).ExecuteWrite(ctx,
-			func(tx neo4j.ManagedTransaction) (any, error) {
-				createEntitiesQuery := utils.ReplaceIndexes(`
-					MATCH (c:Conversation { #conversation_index#: $conversation_id })
-					MERGE (e:Entity { #entity_index#: $entity_id })
-						ON CREATE SET
-							e.created = timestamp(),
-							e.lastAccessed = timestamp()
-						ON MATCH SET
-							e.lastAccessed = timestamp()
-					SET e = { #entity_index#: $entity_id, type: $type, subType: $sub_type, category: $category, raw: $raw }
-					MERGE (c)-[x:ENTITY { #conversation_index#: $conversation_id }]-(e)
-						ON CREATE SET
-							x.created = timestamp(),
-							x.lastAccessed = timestamp()
-						ON MATCH SET
-							x.lastAccessed = timestamp()
-					SET x = { #conversation_index#: $conversation_id }
-					`)
-				result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
-					"conversation_id": mh.conversationId,
-					"entity_id":       entityId,
-					"type":            entity.Type,
-					"sub_type":        entity.SubType,
-					"category":        entity.Category,
-					"raw":             string(data),
-				})
-				if err != nil {
-					klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
-					return nil, err
-				}
-				return result.Collect(ctx)
-			})
-		if err != nil {
-			klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
-			klog.V(6).Infof("EntityResponseMessage LEAVE\n")
-			return err
-		}
-
 		// associate tracker to messages and insights
 		for _, match := range entity.Matches {
+
+			// entity id
+			entityCategory := strings.ReplaceAll(entity.Category, " ", "_")
+			entityType := strings.ReplaceAll(entity.Type, " ", "_")
+			entitySubType := strings.ReplaceAll(entity.SubType, " ", "_")
+			entityValue := strings.ReplaceAll(match.DetectedValue, " ", "_")
+			entityId := fmt.Sprintf("%s/%s/%s/%s", entityCategory, entityType, entitySubType, entityValue)
+
+			// entity
+			_, err := (*mh.neo4jMgr).ExecuteWrite(ctx,
+				func(tx neo4j.ManagedTransaction) (any, error) {
+					createEntitiesQuery := utils.ReplaceIndexes(`
+						MATCH (c:Conversation { #conversation_index#: $conversation_id })
+						MERGE (e:Entity { #entity_index#: $entity_id })
+							ON CREATE SET
+								e.created = datetime(),
+								e.lastAccessed = datetime()
+							ON MATCH SET
+								e.lastAccessed = datetime()
+						SET e = { #entity_index#: $entity_id, type: $type, subType: $sub_type, category: $category, value: $value, raw: $raw }
+						MERGE (c)-[x:ENTITY { #conversation_index#: $conversation_id }]-(e)
+							ON CREATE SET
+								x.created = datetime(),
+								x.lastAccessed = datetime()
+							ON MATCH SET
+								x.lastAccessed = datetime()
+						SET x = { #conversation_index#: $conversation_id }
+						`)
+					result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
+						"conversation_id": mh.conversationId,
+						"entity_id":       entityId,
+						"type":            entity.Type,
+						"sub_type":        entity.SubType,
+						"category":        entity.Category,
+						"value":           match.DetectedValue,
+						"raw":             string(data),
+					})
+					if err != nil {
+						klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
+						return nil, err
+					}
+					return result.Collect(ctx)
+				})
+			if err != nil {
+				klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+				klog.V(6).Infof("EntityResponseMessage LEAVE\n")
+				return err
+			}
 
 			// message
 			for _, msgRef := range match.MessageRefs {
@@ -832,10 +840,10 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 							MATCH (m:Message { #message_index#: $message_id })
 							MERGE (e)-[x:ENTITY_MESSAGE_REF { #conversation_index#: $conversation_id }]-(m)
 								ON CREATE SET
-									x.created = timestamp(),
-									x.lastAccessed = timestamp()
+									x.created = datetime(),
+									x.lastAccessed = datetime()
 								ON MATCH SET
-									x.lastAccessed = timestamp()
+									x.lastAccessed = datetime()
 							SET x = { #conversation_index#: $conversation_id, value: $value }
 							`)
 						result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
@@ -992,31 +1000,31 @@ func (mh *MessageHandler) handleInsight(insight *sdkinterfaces.Insight, squenceN
 				MATCH (c:Conversation { #conversation_index#: $conversation_id })
 				MERGE (i:Insight { #insight_index#: $insight_id })
 					ON CREATE SET
-						i.created = timestamp(),
-						i.lastAccessed = timestamp()
+						i.created = datetime(),
+						i.lastAccessed = datetime()
 					ON MATCH SET
-						i.lastAccessed = timestamp()
+						i.lastAccessed = datetime()
 				SET i = { #insight_index#: $insight_id, type: $type, content: $content, sequenceNumber: $sequence_number, assigneeId: $assignee_id, raw: $raw }
 				MERGE (u:User { #user_index#: $user_id })
 					ON CREATE SET
-						u.created = timestamp(),
-						u.lastAccessed = timestamp()
+						u.created = datetime(),
+						u.lastAccessed = datetime()
 					ON MATCH SET
-						u.lastAccessed = timestamp()
+						u.lastAccessed = datetime()
 				SET u = { realId: $user_real_id, #user_index#: $user_id, name: $user_name, email: $user_id }
 				MERGE (c)-[x:INSIGHT { #conversation_index#: $conversation_id }]-(i)
 					ON CREATE SET
-						x.created = timestamp(),
-						x.lastAccessed = timestamp()
+						x.created = datetime(),
+						x.lastAccessed = datetime()
 					ON MATCH SET
-						x.lastAccessed = timestamp()
+						x.lastAccessed = datetime()
 				SET x = { #conversation_index#: $conversation_id }
 				MERGE (i)-[y:SPOKE { #conversation_index#: $conversation_id }]-(u)
 					ON CREATE SET
-						y.created = timestamp(),
-						y.lastAccessed = timestamp()
+						y.created = datetime(),
+						y.lastAccessed = datetime()
 					ON MATCH SET
-						y.lastAccessed = timestamp()
+						y.lastAccessed = datetime()
 				SET y = { #conversation_index#: $conversation_id }
 				`)
 			result, err := tx.Run(ctx, createInsightQuery, map[string]any{
