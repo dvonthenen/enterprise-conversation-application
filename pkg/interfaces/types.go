@@ -4,7 +4,25 @@
 package interfaces
 
 /*
-	Shared structs
+	AppSpecificType is common metadata relating to all application-level messages with
+	the "Data" property and aspects removed from it. This is just to pluck out the
+	"Type" property to inspect which type of application message this is.
+
+	This struct is needed to:
+	- route and differentiate application-level messages in the UserDefinedMessage callback
+	- using the Server Sent Events (SSE) mode for application-level messages
+*/
+type Metadata struct {
+	Type string `json:"type"`
+}
+
+type AppSpecificType struct {
+	Type     string   `json:"type"`
+	Metadata Metadata `json:"metadata"`
+}
+
+/*
+	Shared structs relating to Recognition and Message insights
 */
 type From struct {
 	ID     string `json:"id,omitempty"`
@@ -20,7 +38,6 @@ type Duration struct {
 }
 
 type Recognition struct {
-	Type    string `json:"type,omitempty"`
 	IsFinal bool   `json:"isFinal,omitempty"`
 	From    From   `json:"user,omitempty"`
 	Content string `json:"transcript,omitempty"`
@@ -33,20 +50,17 @@ type Message struct {
 	Duration Duration `json:"duration,omitempty"`
 }
 
-type Fragment struct {
-	Type     string    `json:"type"`
-	Messages []Message `json:"message,omitempty"`
-}
-
 /*
-	Conversation Insight with Metadata
+	Structs relating to Recognition and Message insights
 */
 type UserDefinedRecognition struct {
-	Type        string      `json:"type,omitempty"`
+	Type        string      `json:"type"`
+	Metadata    Metadata    `json:"metadata"`
 	Recognition Recognition `json:"recognition,omitempty"`
 }
 
 type UserDefinedMessages struct {
-	Type     string   `json:"type"`
-	Fragment Fragment `json:"fragment,omitempty"`
+	Type     string    `json:"type"`
+	Metadata Metadata  `json:"metadata"`
+	Messages []Message `json:"message,omitempty"`
 }

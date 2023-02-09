@@ -7,40 +7,35 @@ package interfaces
 	Higher Level Application Message
 */
 type Author struct {
+	ID    string `json:"id,omitempty"`
 	Name  string `json:"name,omitempty"`
 	Email string `json:"email,omitempty"`
 }
 
 type Message struct {
+	ID     string `json:"id,omitempty"`
+	Text   string `json:"text,omitempty"`
+	Author Author `json:"author,omitempty"`
+}
+
+type Insight struct {
 	Correlation     string `json:"correlation,omitempty"`
-	CurrentContent  string `json:"currentContent,omitempty"`
-	CurrentMatch    string `json:"currentMatch,omitempty"`
-	PreviousContent string `json:"previousContent,omitempty"`
-	PreviousMatch   string `json:"previousMatch,omitempty"`
+	Messages    []Message `json:"message,omitempty"`
 }
 
 type Data struct {
 	Type    string  `json:"type,omitempty"`
-	Author  Author  `json:"author,omitempty"`
-	Message Message `json:"message,omitempty"`
+	Correlation string    `json:"correlation,omitempty"`
+	Current     []Insight `json:"current,omitempty"`
+	Previous    []Insight `json:"previous,omitempty"`
 }
 
-type Historical struct {
-	Type string `json:"type,omitempty"`
-	Data []Data `json:"data,omitempty"`
+type Metadata struct {
+	Type string `json:"type"`
 }
 
 type AppSpecificHistorical struct {
-	Type       string     `json:"type"`
-	Historical Historical `json:"historical,omitempty"`
-}
-
-/*
-	AppSpecificHistoricalType is just AppSpecificHistorical with the "Data" property removed from it.
-	This is simply just to pluck out the "Type" property in order to inspect the value.
-
-	This is only needed when using the Server Sent Events (SSE) mode for Application-level messages
-*/
-type AppSpecificHistoricalType struct {
-	Type string `json:"type,omitempty"`
+	Type       string   `json:"type"`
+	Metadata   Metadata `json:"metadata"`
+	Historical Data     `json:"historical,omitempty"`
 }

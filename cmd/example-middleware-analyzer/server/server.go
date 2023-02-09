@@ -137,6 +137,8 @@ func (s *Server) Start() error {
 		return err
 	}
 
+	// TODO: start metrics and tracing
+
 	klog.V(4).Infof("Server.Start Succeeded\n")
 	klog.V(6).Infof("Server.Start LEAVE\n")
 
@@ -243,6 +245,8 @@ func (s *Server) RebuildMiddlewareAnalyzer() error {
 
 func (s *Server) Stop() error {
 	klog.V(6).Infof("Server.Stop ENTER\n")
+
+	// TODO: stop metrics and tracing
 
 	// clean up middleware
 	if s.middlewareAnalyzer != nil {
