@@ -10,12 +10,12 @@ import (
 func NewMessageCache() *MessageCache {
 	cache := MessageCache{
 		rotatingWindowOfMsg: list.New(),
-		mapIdToMsg:          make(map[string]string),
+		mapIdToMsg:          make(map[string]*Message),
 	}
 	return &cache
 }
 
-func (mc *MessageCache) Push(ID, message string) error {
+func (mc *MessageCache) Push(msgId, text, userId, name, email string) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
@@ -24,27 +24,33 @@ func (mc *MessageCache) Push(ID, message string) error {
 		if e != nil {
 			itemMessage := Message(e.Value.(Message))
 			delete(mc.mapIdToMsg, itemMessage.ID)
+			mc.rotatingWindowOfMsg.Remove(e)
 		}
-		mc.rotatingWindowOfMsg.Remove(e)
 	}
 
-	mc.mapIdToMsg[ID] = message
-	mc.rotatingWindowOfMsg.PushBack(Message{
-		ID:  ID,
-		Msg: message,
-	})
+	message := Message{
+		ID:   msgId,
+		Text: text,
+		Author: Author{
+			ID:    userId,
+			Name:  name,
+			Email: email,
+		},
+	}
+	mc.mapIdToMsg[msgId] = &message
+	mc.rotatingWindowOfMsg.PushBack(message)
 
 	return nil
 }
 
-func (mc *MessageCache) Find(ID string) (string, error) {
+func (mc *MessageCache) Find(msgId string) (*Message, error) {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
-	msg := mc.mapIdToMsg[ID]
+	msg := mc.mapIdToMsg[msgId]
 
-	if msg == "" {
-		return "", ErrItemNotFound
+	if msg == nil {
+		return nil, ErrItemNotFound
 	}
 
 	return msg, nil
