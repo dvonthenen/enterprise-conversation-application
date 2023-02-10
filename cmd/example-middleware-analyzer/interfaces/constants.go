@@ -10,4 +10,7 @@ const (
 	// user/app level notification messages
 	UserMessageTypeTrackerAssociation string = "message_tracker_association"
 	UserMessageTypeEntityAssociation  string = "message_entity_association"
+
+	// app specific message type
+	MessageNotFound string = "**MESSAGE NOT FOUND**"
 )

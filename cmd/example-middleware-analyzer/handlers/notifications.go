@@ -44,7 +44,7 @@ func (h *Handler) RecognitionResultMessage(rr *sdkinterfaces.RecognitionResult) 
 
 func (h *Handler) MessageResponseMessage(mr *sdkinterfaces.MessageResponse) error {
 	for _, msg := range mr.Messages {
-		h.cache.Push(msg.ID, msg.Payload.Content)
+		h.cache.Push(msg.ID, msg.Payload.Content, msg.From.ID, msg.From.Name, msg.From.UserID)
 	}
 	return nil
 }
@@ -104,7 +104,7 @@ func (h *Handler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) error {
 
 				content := ""
 				for _, msgRef := range curTopic.MessageReferences {
-					contentTmp, err := h.cache.Find(msgRef.ID)
+					tmpMessage, err := h.cache.Find(msgRef.ID)
 					if err != nil {
 						klog.V(4).Infof("Msg ID not found: %s\n", msgRef.ID)
 						continue
@@ -113,7 +113,7 @@ func (h *Handler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) error {
 					if len(content) > 0 {
 						content += "/"
 					}
-					content += contentTmp
+					content += tmpMessage.Text
 				}
 
 				msg.Historical = append(msg.Historical, interfaces.Data{
@@ -455,7 +455,7 @@ func (h *Handler) UnhandledMessage(byMsg []byte) error {
 	return ErrUnhandledMessage
 }
 
-func convertRootWordToString(words []sdkinterfaces.RootWord) string {
+func (h *Handler) convertRootWordToString(words []sdkinterfaces.RootWord) string {
 	tmp := ""
 	for _, word := range words {
 		if len(tmp) > 0 {
