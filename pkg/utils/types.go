@@ -11,13 +11,19 @@ import (
 /*
 	MessageCache
 */
+type Author struct {
+	ID    string
+	Name  string
+	Email string
+}
 type Message struct {
-	ID  string
-	Msg string
+	ID     string
+	Text   string
+	Author Author
 }
 
 type MessageCache struct {
 	rotatingWindowOfMsg *list.List
-	mapIdToMsg          map[string]string
+	mapIdToMsg          map[string]*Message
 	mu                  sync.Mutex
 }
