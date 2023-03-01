@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/dvonthenen/rabbitmq-manager v0.1.1
-	github.com/dvonthenen/symbl-go-sdk v0.1.5-0.20230209154332-b0916120e2bf
+	github.com/dvonthenen/symbl-go-sdk v0.1.5-0.20230301015713-52a9b4498249
 	github.com/hokaccha/go-prettyjson v0.0.0-20211117102719-0474bc63780f
 	github.com/koding/websocketproxy v0.0.0-20181220232114-7ed82d81a28c
 	github.com/neo4j/neo4j-go-driver/v5 v5.3.0
