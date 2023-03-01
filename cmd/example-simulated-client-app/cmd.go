@@ -13,11 +13,13 @@ import (
 	"os/signal"
 	"time"
 
-	streaming "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1"
+	// sse "github.com/r3labs/sse/v2"
+	// streaming "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1"
 	microphone "github.com/dvonthenen/symbl-go-sdk/pkg/audio/microphone"
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/client/interfaces"
-	// sse "github.com/r3labs/sse/v2"
+
+	handler "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-simulated-client-app/handler"
 )
 
 type HeadersContext struct{}
@@ -47,7 +49,8 @@ func main() {
 		if you wanted to something more meaningful with the output besides just print to the console,
 		you would create your own implementation of a message router instead of using the default one
 	*/
-	router := streaming.NewDefaultMessageRouter()
+	// router := streaming.NewDefaultMessageRouter()
+	router := handler.NewMyMessageRouter()
 
 	options := symbl.StreamingOptions{
 		SymblConfig:  cfg,
