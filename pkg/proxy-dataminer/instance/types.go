@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
-	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
-	wsinterfaces "github.com/koding/websocketproxy/pkg/interfaces"
+	halfproxy "github.com/dvonthenen/websocketproxy/pkg/half-duplex"
+	wsinterfaces "github.com/dvonthenen/websocketproxy/pkg/interfaces"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	sse "github.com/r3labs/sse/v2"
 
