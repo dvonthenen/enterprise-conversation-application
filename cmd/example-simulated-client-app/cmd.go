@@ -53,9 +53,11 @@ func main() {
 	router := handler.NewMyMessageRouter()
 
 	options := symbl.StreamingOptions{
-		SymblConfig:  cfg,
-		ProxyAddress: "127.0.0.1",
-		Callback:     router,
+		SymblConfig:     cfg,
+		SymblEndpoint:   "127.0.0.1",
+		RedirectService: true,
+		SkipServerAuth:  true,
+		Callback:        router,
 	}
 
 	client, err := symbl.NewStreamClient(ctx, options)
