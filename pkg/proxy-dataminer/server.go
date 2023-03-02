@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	wsinterfaces "github.com/koding/websocketproxy/pkg/interfaces"
+	wsinterfaces "github.com/dvonthenen/websocketproxy/pkg/interfaces"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	klog "k8s.io/klog/v2"
 

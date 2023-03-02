@@ -12,9 +12,9 @@ import (
 	rabbit "github.com/dvonthenen/rabbitmq-manager/pkg"
 	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	sdkinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
+	common "github.com/dvonthenen/websocketproxy/pkg/common"
+	halfproxy "github.com/dvonthenen/websocketproxy/pkg/half-duplex"
 	prettyjson "github.com/hokaccha/go-prettyjson"
-	common "github.com/koding/websocketproxy/pkg/common"
-	halfproxy "github.com/koding/websocketproxy/pkg/half-duplex"
 	sse "github.com/r3labs/sse/v2"
 	klog "k8s.io/klog/v2"
 
