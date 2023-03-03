@@ -510,7 +510,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 				result, err := tx.Run(ctx, createTopicsQuery, map[string]any{
 					"conversation_id":     mh.conversationId,
 					"topic_id":            topic.ID,
-					"phrases":             topic.Phrases,
+					"phrases":             strings.ToLower(topic.Phrases),
 					"score":               topic.Score,
 					"type":                topic.Type,
 					"symbl_message_index": topic.MessageIndex,
@@ -639,7 +639,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 				result, err := tx.Run(ctx, createTrackersQuery, map[string]any{
 					"conversation_id": mh.conversationId,
 					"tracker_id":      tracker.ID,
-					"tracker_name":    tracker.Name,
+					"tracker_name":    strings.ToLower(tracker.Name),
 					"raw":             string(data),
 				})
 				if err != nil {
@@ -676,7 +676,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 							"conversation_id": mh.conversationId,
 							"tracker_id":      tracker.ID,
 							"message_id":      msgRef.ID,
-							"tracker_name":    tracker.Name,
+							"tracker_name":    strings.ToLower(tracker.Name),
 							"value":           strings.ToLower(match.Value),
 							"raw":             string(data),
 						})
@@ -712,7 +712,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 							"conversation_id": mh.conversationId,
 							"tracker_id":      tracker.ID,
 							"insight_id":      inRef.ID,
-							"tracker_name":    tracker.Name,
+							"tracker_name":    strings.ToLower(tracker.Name),
 							"value":           strings.ToLower(match.Value),
 							"raw":             string(data),
 						})
@@ -789,10 +789,10 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 		for _, match := range entity.Matches {
 
 			// entity id
-			entityCategory := strings.ReplaceAll(entity.Category, " ", "_")
-			entityType := strings.ReplaceAll(entity.Type, " ", "_")
-			entitySubType := strings.ReplaceAll(entity.SubType, " ", "_")
-			entityValue := strings.ReplaceAll(match.DetectedValue, " ", "_")
+			entityCategory := strings.ToLower(strings.ReplaceAll(entity.Category, " ", "_"))
+			entityType := strings.ToLower(strings.ReplaceAll(entity.Type, " ", "_"))
+			entitySubType := strings.ToLower(strings.ReplaceAll(entity.SubType, " ", "_"))
+			entityValue := strings.ToLower(strings.ReplaceAll(match.DetectedValue, " ", "_"))
 			entityId := fmt.Sprintf("%s/%s/%s/%s", entityCategory, entityType, entitySubType, entityValue)
 
 			// entity
@@ -818,9 +818,9 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 					result, err := tx.Run(ctx, createEntitiesQuery, map[string]any{
 						"conversation_id": mh.conversationId,
 						"entity_id":       entityId,
-						"type":            entity.Type,
-						"sub_type":        entity.SubType,
-						"category":        entity.Category,
+						"type":            strings.ToLower(entity.Type),
+						"sub_type":        strings.ToLower(entity.SubType),
+						"category":        strings.ToLower(entity.Category),
 						"value":           strings.ToLower(match.DetectedValue),
 						"raw":             string(data),
 					})
@@ -1036,7 +1036,7 @@ func (mh *MessageHandler) handleInsight(insight *sdkinterfaces.Insight, squenceN
 			result, err := tx.Run(ctx, createInsightQuery, map[string]any{
 				"conversation_id": mh.conversationId,
 				"insight_id":      insight.ID,
-				"type":            insight.Type,
+				"type":            strings.ToLower(insight.Type),
 				"content":         insight.Payload.Content,
 				"sequence_number": squenceNumber,
 				"assignee_id":     insight.Assignee.UserID,
