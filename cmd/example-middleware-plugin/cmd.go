@@ -9,8 +9,9 @@ import (
 	"os"
 	"os/signal"
 
-	server "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-middleware-analyzer/server"
-	analyzer "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer"
+	middlewaresdk "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk"
+
+	server "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-middleware-plugin/server"
 )
 
 func main() {
@@ -19,8 +20,8 @@ func main() {
 	signal.Notify(sig, os.Interrupt, os.Kill)
 
 	// init
-	analyzer.Init(analyzer.EnterpriseInit{
-		LogLevel: analyzer.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace
+	middlewaresdk.Init(middlewaresdk.EnterpriseInit{
+		LogLevel: middlewaresdk.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace
 	})
 
 	middlewareServer, err := server.New(server.ServerOptions{

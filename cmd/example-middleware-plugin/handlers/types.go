@@ -7,7 +7,7 @@ import (
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer/interfaces"
+	interfacessdk "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/interfaces"
 	utils "github.com/dvonthenen/enterprise-reference-implementation/pkg/utils"
 )
 
@@ -27,5 +27,5 @@ type Handler struct {
 	// housekeeping
 	session      *neo4j.SessionWithContext
 	symblClient  *symbl.RestClient
-	msgPublisher *interfaces.MessagePublisher
+	msgPublisher *interfacessdk.MessagePublisher
 }

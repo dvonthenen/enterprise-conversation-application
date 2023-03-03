@@ -7,7 +7,7 @@ import (
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 
-	middleware "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer"
+	middlewaresdk "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk"
 )
 
 // Credentials is the input needed to login to neo4j
@@ -32,7 +32,7 @@ type Server struct {
 	creds   Credentials
 
 	// middleware
-	middlewareAnalyzer *middleware.MiddlewareAnalyzer
+	middlewareAnalyzer *middlewaresdk.MiddlewareAnalyzer
 
 	// neo4j
 	driver *neo4j.DriverWithContext

@@ -11,9 +11,10 @@ import (
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	klog "k8s.io/klog/v2"
 
-	handlers "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-middleware-analyzer/handlers"
-	middleware "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer"
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer/interfaces"
+	middlewaresdk "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk"
+	interfacessdk "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/interfaces"
+
+	handlers "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-middleware-plugin/handlers"
 )
 
 func New(options ServerOptions) (*Server, error) {
@@ -221,10 +222,10 @@ func (s *Server) RebuildMiddlewareAnalyzer() error {
 	})
 
 	// create middleware
-	var callback interfaces.InsightCallback
+	var callback interfacessdk.InsightCallback
 	callback = messageHandler
 
-	middlewareAnalyzer, err := middleware.NewMiddlewareAnalyzer(middleware.MiddlewareAnalyzerOption{
+	middlewareAnalyzer, err := middlewaresdk.NewMiddlewareAnalyzer(middlewaresdk.MiddlewareAnalyzerOption{
 		RabbitURI: s.options.RabbitURI,
 		Callback:  &callback,
 	})

@@ -21,7 +21,7 @@ In addition to the above characteristics, Enterprise-class features specifically
 - Data Aggregation - Has the ability to detect trends or patterns based on historical data over time
 - Predictive Actions - Performing autonomous application driven actions based on data patterns discovered
 
-## Generic Architecture Diagram
+## Architecture Diagram Overview
 
 This is a high-level block diagram, that satisfies the above characteristics, for what the architecture of an Enterprise Conversation could look like...
 
@@ -38,19 +38,51 @@ Feature Benefits for this Enterprise Reference Architecture:
 - UI isolation. Change all aspects of UI frameworks without changing the code
 - Also supports Asynchronous analysis of data
 
-### Enterprise Reference Implementation
+### Deep Dive of this Architecture
 
-Given the architecture above, the **code in this repository** implements the following using the described software platform or components:
+This architecture calls for a minimum of 3 required components. They are:
+
+- Symbl.ai Dataminer/Proxy Service
+- Middleware Plugin
+- Client Interface (Web, CLI, App, etc)
+
+#### **Symbl.ai Dataminer/Proxy**
+
+This [Symbl Proxy/Dataminer](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer) aims to ingest the data, create any additional metadata to associate with these insights, and then save this context to recall later. There happens to be an excellent platform that does all of the heavy lifting for us, **cough cough** the [Symbl Platform](https://platform.symbl.ai). Using the Symbl Platform, we can extract these conversation insights without having to train models, have expertise in Artificial Intelligence or Machine Learning, or require a team of data scientists.
+
+Preserving insights represents the first of two significant pieces of work in this design. In order to aggregate conversation insights from external conversation sources and through historical data, we need to have a method for persisting this data to recall and make associations to conversations happening now. This component bites off this aspect of the design.
+
+#### **Middleware Plugin**
+
+Middleware Plugins are a significant component required in this Enterprise Reference Implementation for Conversation Analysis. It provides associations or defining the relationships between contextual insights and your business.
+
+A Middleware Plugin is deeply tied to what your business cares about. This plugin, either in code or interfacing with another external system, captures your company's specific business rules, goals, or what you hope to achieve. For example, these business rules can then be used to notify others within the company to take action, create events that you might want to pass along to other software systems, or trigger actions you want to perform directly in this component.
+
+In this architecture, these events are called **Application Specific Messages**. These application specific messages are unique to your business and what you care about. These messages are created by your Middleware Plugin and sent to your UI or Client Interface. We will talk more about this in the next section.
+
+To reiterate, since these plugins are codified business rules for **YOUR** business, these plugins will most likely require to be built by **YOU**. Having said that, we decided to create a pluggable framework for your Middleware needs which means that there is a great deal of code reuse that can happen if you fully leverage this framework.
+
+#### **Client Application aka User Interface**
+
+The last piece in this architecture is the Client-side Application. This interface can be an Angular Web UI, another REST service, [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) application, etc.
+
+This interfaces does not and probably will not be built from scratch. It's more likely you already have an interface that your customers or clients already use. You will augment that User Interface to receive these **Application Specific Messages** to display within your interface.
+
+For example, your company might provide a sales enablement platform that uses conversation insights to help increase and drives sales for your customers. Within your customer conversation on your platform, you might have received a Symbl event that a customer mentioned the topic surrounding a product you have within your profolio. An **Application Specific Messages** can be sent to your sales person within your UI to discuss that particular product to your customer.
+
+## Enterprise Reference Implementation
+
+Given the architecture above, the code in this repository implements the following cusing the described software platform or components:
 
 ![Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-architecture-implementation.png?raw=true)
 
-The 3 major components in this reference implementation are:
+The 3 components within this repo which correspond to the 3 components we talked about in the previous Overview section are:
 
-- Symbl.ai Dataminer/Proxy
+- Symbl.ai Dataminer/Proxy Service
 - Example Middleware Plugin
-- Simple Client (Web, App, etc)
+- Example Client Interface
 
-And *currently* leverages these external software platforms:
+And they *currently* leverage these external software platforms:
 
 - [Neo4J](https://neo4j.com/) for Conversation Insight Persistence
   - [What is Neo4J?](https://neo4j.com/docs/getting-started/current/)
@@ -59,36 +91,30 @@ And *currently* leverages these external software platforms:
   - [What is RabbitMQ?](https://blog.iron.io/what-is-rabbitmq/)
   - [Platform Support](https://www.rabbitmq.com/devtools.html)
 
-#### Symbl.ai Dataminer/Proxy
+### Symbl.ai Dataminer/Proxy
 
-This [Symbl Proxy/Dataminer](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer) aims to ingest the data, create any additional metadata to associate with these insights, and then save this context to recall later. There happens to be an excellent platform that does all of the heavy lifting for us. We can extract these conversation insights without having to train models, have expertise in Artificial Intelligence or Machine Learning, or require a team of data scientists. Of course, I'm talking about using the real-time streaming capabilities on the Symbl.ai Platform.
+This [Symbl Proxy/Dataminer](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer) component can and should be re-used as-is. This does a lot of the heavy-lifting and will save you some time to implement a custm component and database schema that essentially can be reused as an off-the-shelf component. It is highly encouraged to use this component for reasons we will get into later on.
 
-Preserving insights represents the first of two significant pieces of work in this design. In order to aggregate conversation insights from external conversation sources and through historical data, we need to have a method for persisting this data to recall and make associations to conversations happening now. This component bites off this aspect of the design.
+### Example Middleware Plugin
 
-#### Example Middleware Component
+There is a generic scaffold implementation provided in this repo which sends an **Application Specific Messages** for each type Symbl insight (Topics, Trackers, Entities, etc). The intent of this Enterprise Reference Implementation is only to be just that... a reference. This [Example Middleware Plugin](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-middleware-plugin) contained in the repo is only a starting point for your own implementation of a plugin. This scaffold code should be modified to capture your business rules to fit your specific business needs.
 
-The last but very significant feature required in this Enterprise Reference Implementation for Conversation Analysis, which is making associations or defining the relationships between contextual insights, happens in this [Example Middleware/Analyzer component](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-middleware-analyzer). This Middleware component is deeply tied to what your business cares about. This component, either in code or interfacing with another external system, captures your company's specific business rules. These business rules can then be used to notify others within the company to take action, create events that you might want to pass along to other software systems, or trigger actions you want to perform directly in this component.
+### Example Simple Client
 
-Although there is a generic implementation provided in this Middleware component, the intent of this Enterprise Reference Implementation is only to be just that… a reference. This Middleware component contained in the repo should either, at minimum, be modified to capture your business rules or in practice, be reimplemented to fit your specific business needs.
-
-#### Simple Client
-
-Instead of building out a web client using a [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) platform, an easier to use interface into this system should just be taking your local laptop's microphone input and speaking into it. That what this [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app) does.
+Instead of building out a full blown web client using a [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) platform, this repo provides a simple client that takes your local laptop's microphone input to provide the conversation. That's what this [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app) does.
 
 ## How to Deploy the Example Application in this Repository
 
-The example application contained within this repo provides the last 5 mentions of Trackers, Entity, and Topics in **PREVIOUS** conversations. An implementation of this Reference Enterprise Architecture will consist of at least 3 components, they are:
-
-- [Symbl Proxy/Dataminer](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer)
-- [Example Middleware/Analyzer component](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-middleware-analyzer)
-- [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app)
+This section goes over how to deploy and run the components within this repo.
 
 ### Prerequisite Software
 
-For the easiest way to run this locally, you are going to need to install:
+If you don't have this software running on your laptop, you are going to need to install:
 
 - [Docker Desktop](https://docs.docker.com/get-docker/)
 - [Golang](https://go.dev/doc/install)
+
+> **_NOTE:_** Container images will be made available soon. This should dramatically decrease the barrier of entry to get this stuff up an running.
 
 ### Prerequisite Components
 
@@ -115,7 +141,7 @@ foo@bar:~$ docker run \
                 --hostname my-rabbit --name my-rabbit rabbitmq:3
 ```
 
-To clean up both of these instance, you need to first `stop` then `rm` the instances in Docker.
+To clean up both of these instance when you are finished with them, you need to first `stop` then `rm` the instances in Docker.
 
 ```bash
 foo@bar:~$ docker container ls --all
@@ -123,7 +149,7 @@ foo@bar:~$ docker stop <container id>
 foo@bar:~$ docker rm <container id>
 ```
 
-### Running the Example Application
+### Running the Example Middleware Plugin and Simulated Client
 
 Make sure the Prerequisite Component instances are running before proceeding! Clone the [Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation) repo and the change your working directory to the root of that repo.
 
@@ -139,10 +165,10 @@ foo@bar:~$ cd ./cmd/symbl-proxy-dataminer
 foo@bar:~$ go run cmd.go
 ```
 
-In a new console window when you are at the root of the repo, you can start the [Example Middleware/Analyzer component](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-middleware-analyzer) by running the following commands:
+In a new console window when you are at the root of the repo, you can start the [Example Middleware Plugin](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-middleware-plugin) by running the following commands:
 
 ```bash
-foo@bar:~$ cd ./cmd/example-middleware-analyzer
+foo@bar:~$ cd ./cmd/example-middleware-plugin
 foo@bar:~$ go run cmd.go
 ```
 
@@ -153,15 +179,67 @@ foo@bar:~$ cd ./cmd/example-simulated-client-app
 foo@bar:~$ go run cmd.go
 ```
 
-Once the [Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app) is running, you should be able to speak into your microphone to simulate a conversation that would take place on various platforms like a [Zoom](https://zoom.us/) meeting, on a [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) platform, etc.
+Once the [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app) is running, you should be able to speak into your microphone to simulate a conversation that would take place on various platforms like a [Zoom](https://zoom.us/) meeting, on a [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) platform, etc.
 
-To really get the effectiveness out of this Enterprise Reference Implementation example, you should create  at least 1 [custom Tracker](https://docs.symbl.ai/docs/custom-trackers) that you want to trigger in your first conversation (ie when you first start and speaking into the [Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app)) and then closing [Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app) by hitting any key. This will simulate the completion of a single conversation.
+As you start to speak into your microphone, you should see example application specific messages come through on the example client. Pretty simple!
 
-Since the Example in this repo is exploring the use case of aggregating conversation over time, you want to start another conversation session by launching the [Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app) again and then trigger a second instance of the same [custom Tracker](https://docs.symbl.ai/docs/custom-trackers). In the console of the [Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app), you should see an Application-level message showing you the last reference(s) made to that [custom Tracker](https://docs.symbl.ai/docs/custom-trackers). You can do this repeatly and you will see the past 5 Trackers, Entities, and Topics mentions in previous conversations in the console of your [Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app).
+## Running Plugins from Conversation Plugins Repo
+
+Are you looking for a more meaningful demo or example of the real power of this architecture? We previously hinted at this implementation of a pluggable framework where you can start various Middleware Plugins to provide off-the-shelf capabilities. We have an [Enterprise Conversation Plugins](https://github.com/dvonthenen/enterprise-conversation-plugins) repo that serves as an App Store of pre-built functionality in the form individual plugins.
+
+The first couple of plugins implemented in this repo are:
+- the [Historical Insights Plugin](https://github.com/dvonthenen/enterprise-conversation-plugins/tree/main/plugins/historical-insights) which triggers an Application Specific Message of the last 5 mentions of a Topic, Tracker, Entity, etc
+- the [Statistical Insights Plugin](https://github.com/dvonthenen/enterprise-conversation-plugins/tree/main/plugins/statistical-insights) which provides the number of times a topic, Tracker, Entity, etc has been mentioned in the past 30 mins, hour, 4 hours, day, 2 days, week and month.
+
+### How Do I Launch These Plugins
+
+To try these plugins out, make sure the Prerequisite Component instances are running before proceeding! Assuming you have already cloned the [Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation), clone the [Enterprise Conversation Plugins](hhttps://github.com/dvonthenen/enterprise-conversation-plugins) repo to your local laptop.
+
+```bash
+foo@bar:~$ git clone git@github.com:dvonthenen/enterprise-conversation-plugins.git
+foo@bar:~$ cd enterprise-reference-implementation
+```
+
+Like before, start the [Symbl Proxy/Dataminer](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer) in the console by running the following commands:
+
+In your first console windows, run:
+```bash
+foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-reference-implementation
+foo@bar:~$ cd ./cmd/symbl-proxy-dataminer
+foo@bar:~$ go run cmd.go
+```
+
+Instead of starting the Example Middleware Plugin, start the [Historical Insights Plugin](https://github.com/dvonthenen/enterprise-conversation-plugins/tree/main/plugins/historical-insights) and the [Statistical Insights Plugin](https://github.com/dvonthenen/enterprise-conversation-plugins/tree/main/plugins/statistical-insights)  each in their own console window.
+
+In a second console windows, run the `historical-insights` plugin by executing:
+```bash
+foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-conversation-plugins
+foo@bar:~$ cd ./plugins/historical-insights
+foo@bar:~$ go run cmd.go
+```
+
+In a third console windows, run the `statistical-insights` plugin by executing:
+```bash
+foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-conversation-plugins
+foo@bar:~$ cd ./plugins/statistical-insights
+foo@bar:~$ go run cmd.go
+```
+
+Finally, create a fourth console window to start the [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-simulated-client-app) by running the following commands:
+
+```bash
+foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-reference-implementation
+foo@bar:~$ cd ./cmd/example-simulated-client-app
+foo@bar:~$ go run cmd.go
+```
+
+Then start talking into the microphone. Since both of these plugins are about aggregating conversations over time, close the `example-simulated-client-app` instance after having mentioned some topics, entities, trackers, etc. Then start up another instance of the `example-simulated-client-app` (which can be done in the same console window) and mention the same topics, entities, trackers, etc as in the previous conversation session. You should start to see some historical and statistical data flowing through to the client when those past insights are triggered.
 
 ## More Information
 
-If you are looking for a detailed description and even a video that walks through this architecture diagram, please look at this [blog post](https://symbl.ai/blog/everything-to-know-about-enterprise-reference-implementation-for-conversation-aggregation/).
+If you are looking for a detailed description and even a video that walks through this architecture diagram, please look at this blog called [Everything to Know About Enterprise Reference Implementation for Conversation Aggregation](https://symbl.ai/blog/everything-to-know-about-enterprise-reference-implementation-for-conversation-aggregation/).
+
+Looking for more information about deployment strategies as they relate to storage, take a look at this blog post called [Databases and Persistent Storage for Conversation Data](https://symbl.ai/blog/databases-and-persistent-storage-for-conversation-data/).
 
 ### Contact Information
 
