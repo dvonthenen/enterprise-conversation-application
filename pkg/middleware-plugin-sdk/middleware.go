@@ -8,8 +8,8 @@ import (
 	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	klog "k8s.io/klog/v2"
 
-	middlewareinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer/interfaces"
-	router "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-analyzer/router"
+	middlewareinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/interfaces"
+	router "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/router"
 	shared "github.com/dvonthenen/enterprise-reference-implementation/pkg/shared"
 )
 
