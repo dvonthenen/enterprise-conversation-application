@@ -8,10 +8,14 @@ import (
 )
 
 /*
-	This implementer of this interface handle much of the routing to your middleware-analyzer component
-	As Symbl insights are receive from the platform, these callbacks will be invoked
+	This implementer of this interface handles much of the routing to your middleware-analyzer component
+	As Symbl insights are received from the platform, these callbacks will be invoked
 */
 type InsightCallback interface {
+	/*
+		This ensures there is a 1-to-1 mapping between insights the Symbl Platform provides and
+		which events are possible to be notified to
+	*/
 	sdkinterfaces.InsightCallback
 
 	/*
@@ -30,7 +34,7 @@ type MessagePublisher interface {
 
 /*
 	Interface to the InsightManager which receives Rabbit messages and then calls the
-	appropriate callback function
+	appropriate callback function in the InsightCallback interface above
 */
 type InsightManager interface {
 	Init() error
