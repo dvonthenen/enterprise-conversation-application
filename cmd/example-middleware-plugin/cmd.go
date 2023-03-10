@@ -21,7 +21,7 @@ func main() {
 
 	// init
 	middlewaresdk.Init(middlewaresdk.EnterpriseInit{
-		LogLevel: middlewaresdk.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace
+		LogLevel: middlewaresdk.LogLevelStandard, // LogLevelStandard / LogLevelFull / LogLevelTrace / LogLevelVerbose
 	})
 
 	middlewareServer, err := server.New(server.ServerOptions{

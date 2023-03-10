@@ -12,6 +12,8 @@ github.com/dvonthenen/websocket v1.5.1-dyv.2 h1:OXlWJJkeHt8k4+MEI0Y8SQjY2ihHYD2z
 github.com/dvonthenen/websocket v1.5.1-dyv.2/go.mod h1:q2GbopbpFJvBP4iqVvqwwahVmvu2HnCfdqCWDoQVKMM=
 github.com/dvonthenen/websocketproxy v0.1.0-dyv.1 h1:/mMEvCZaFV/hdYHleF65rFuC7ZuqPZTPEv4PYnqO10I=
 github.com/dvonthenen/websocketproxy v0.1.0-dyv.1/go.mod h1:nnUglOusS/g50RzXXD/L+b/UbYJDy+LNPEUrB75Z37A=
+github.com/dvonthenen/websocketproxy v0.1.0-dyv.4 h1:+osPTDrTmv+2sgo/dhcRLod+I6olG5bs8kdJfmSTazQ=
+github.com/dvonthenen/websocketproxy v0.1.0-dyv.4/go.mod h1:eM7p+X6N/KXzCx4x2vn/Fw2mwF9dt240BDLiyyoe/Y4=
 github.com/fatih/color v1.13.0 h1:8LOYc1KYPPmyKMuN8QV2DNRWNbLo6LZ0iLs8+mlH53w=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/go-logr/logr v1.2.0 h1:QK40JKJyMdUDz+h+xvCsru/bJhvG0UxvePV0ufL/AcE=

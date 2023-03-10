@@ -225,7 +225,7 @@ func (p *Proxy) ProcessMessage(byData []byte) error {
 		Client Application (Web UI, CPaaS, etc). These are NOT Symbl conversation messages, but
 		rather your custom application messages.
 	*/
-	klog.V(5).Infof(" [x] %s\n", string(byData))
+	klog.V(7).Infof(" [x] %s\n", string(byData))
 
 	switch p.options.NotifyType {
 	case ClientNotifyTypeWebSocket:
