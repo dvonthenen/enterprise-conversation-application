@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/dvonthenen/rabbitmq-manager v0.1.1
-	github.com/dvonthenen/symbl-go-sdk v0.1.6
+	github.com/dvonthenen/symbl-go-sdk v0.1.7
 	github.com/dvonthenen/websocketproxy v0.1.0-dyv.4
 	github.com/hokaccha/go-prettyjson v0.0.0-20211117102719-0474bc63780f
 	github.com/neo4j/neo4j-go-driver/v5 v5.3.0
@@ -24,8 +24,8 @@ require (
 	github.com/mattn/go-colorable v0.1.9 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/rabbitmq/amqp091-go v1.5.0 // indirect
-	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4 // indirect
-	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
+	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/go-playground/validator.v9 v9.31.0 // indirect
 )
