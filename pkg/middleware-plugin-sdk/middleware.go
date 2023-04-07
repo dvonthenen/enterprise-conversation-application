@@ -1,4 +1,4 @@
-// Copyright 2023 Symbl.ai SDK contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package middleware
