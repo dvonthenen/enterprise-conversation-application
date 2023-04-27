@@ -43,7 +43,6 @@ type Proxy struct {
 	options ProxyOptions
 
 	// housekeeping
-	// callback *symblinterfaces.InsightCallback
 	neo4jMgr   *neo4j.SessionWithContext
 	messageMgr *routing.MessageHandler
 	proxyMgr   *wsinterfaces.ManageCallback

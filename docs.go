@@ -10,8 +10,11 @@ GitHub repo: https://github.com/dvonthenen/enterprise-reference-implementation
 package sdk
 
 import (
-	_ "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-middleware-plugin"
+	_ "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-asynchronous-plugin"
+	_ "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-realtime-plugin"
 	_ "github.com/dvonthenen/enterprise-reference-implementation/cmd/symbl-proxy-dataminer"
+	_ "github.com/dvonthenen/enterprise-reference-implementation/cmd/symbl-rest-dataminer"
 	_ "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk"
 	_ "github.com/dvonthenen/enterprise-reference-implementation/pkg/proxy-dataminer"
+	_ "github.com/dvonthenen/enterprise-reference-implementation/pkg/rest-dataminer"
 )

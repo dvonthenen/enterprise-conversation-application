@@ -10,17 +10,33 @@ import (
 )
 
 /*
-	MiddlewareAnalyzer struct
+	RealtimeAnalyzer struct
 */
-type MiddlewareAnalyzerOption struct {
+type RealtimeAnalyzerOption struct {
 	RabbitURI string
 	Callback  *interfaces.InsightCallback
 }
 
-type MiddlewareAnalyzer struct {
+type RealtimeAnalyzer struct {
 	// rabbit
 	rabbitManager *rabbitinterfaces.Manager
 
 	// callback
 	callback *interfaces.InsightCallback
+}
+
+/*
+	AsynchronousAnalyzer struct
+*/
+type AsynchronousAnalyzerOption struct {
+	RabbitURI string
+	Callback  *interfaces.AsynchronousCallback
+}
+
+type AsynchronousAnalyzer struct {
+	// rabbit
+	rabbitManager *rabbitinterfaces.Manager
+
+	// callback
+	callback *interfaces.AsynchronousCallback
 }
