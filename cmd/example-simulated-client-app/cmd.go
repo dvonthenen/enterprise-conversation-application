@@ -153,7 +153,11 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, os.Kill)
 
-	mic, err := microphone.Initialize(microphone.AudioConfig{
+	// init the library
+	microphone.Initialize()
+
+	// create mic
+	mic, err := microphone.New(microphone.AudioConfig{
 		InputChannels: 1,
 		SamplingRate:  16000,
 	})
