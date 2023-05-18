@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package middleware
@@ -8,9 +8,9 @@ import (
 	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 	klog "k8s.io/klog/v2"
 
-	middlewareinterfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/interfaces"
-	router "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/router/realtime"
-	shared "github.com/dvonthenen/enterprise-reference-implementation/pkg/shared"
+	middlewareinterfaces "github.com/dvonthenen/enterprise-conversation-application/pkg/middleware-plugin-sdk/interfaces"
+	router "github.com/dvonthenen/enterprise-conversation-application/pkg/middleware-plugin-sdk/router/realtime"
+	shared "github.com/dvonthenen/enterprise-conversation-application/pkg/shared"
 )
 
 func NewRealtimeAnalyzer(options RealtimeAnalyzerOption) (*RealtimeAnalyzer, error) {

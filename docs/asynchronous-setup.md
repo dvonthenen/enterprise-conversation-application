@@ -9,7 +9,7 @@ There are 2 components within this repo that correspond to the components in the
 
 If you place these component within the architecture diagram, you get the implementation diagram for your application below:
 
-![Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-asynchronous-architecture.png?raw=true)
+![Enterprise Conversation Application](https://github.com/dvonthenen/enterprise-conversation-application/blob/main/docs/images/enterprise-asynchronous-architecture.png?raw=true)
 
 And that implementation leverages these external software platforms:
 
@@ -22,13 +22,13 @@ And that implementation leverages these external software platforms:
 
 ## Symbl.ai Asynchronous REST/Dataminer Service
 
-This [Symbl Asynchronous REST/Dataminer Service](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-rest-dataminer) component can and should be re-used as-is. This does a lot of the heavy-lifting and will save you some time to implement a custom component and database schema that essentially can be reused as an off-the-shelf component. It is highly encouraged to use this component for reasons we will get into later on.
+This [Symbl Asynchronous REST/Dataminer Service](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/symbl-rest-dataminer) component can and should be re-used as-is. This does a lot of the heavy-lifting and will save you some time to implement a custom component and database schema that essentially can be reused as an off-the-shelf component. It is highly encouraged to use this component for reasons we will get into later on.
 
 This REST/Dataminer Service makes use of the [Asynchronous API](https://docs.symbl.ai/docs/async-api) to receive conversation insights from the Symbl Platform. This component exposes a REST endpoint which takes in a conversation ID and then retreives all of the conversation insights for that pre-processed conversation ID. For each insight retrieved from the platform, this component will send a corresponding RabbitMQ message for each type of insight. This message will then be consumed by your middleware plugin to perform some action of your chosing.
 
 ## Example Asynchronous Middleware Plugin
 
-The [Example Asynchronous Middleware Plugin](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-asynchronous-plugin) contained in the repo is only a starting point for your own implementation of a plugin. This scaffold code should be modified to capture your business rules to fit your specific business needs.
+The [Example Asynchronous Middleware Plugin](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/example-asynchronous-plugin) contained in the repo is only a starting point for your own implementation of a plugin. This scaffold code should be modified to capture your business rules to fit your specific business needs.
 
 Since these conversations aren't tied to conversation currently happening (aka ones happening in realtime) but rather conversation that occurred asynchronously in the past, this generic scaffold implementation does **NOT** send Application Specific Messages for each type Symbl insight (Topics, Trackers, Entities, etc). There **could** be use cases for processing past conversations which may require an immediate notification of someone in a meeting, but right now it's hard to imagine that use case.
 
@@ -82,21 +82,21 @@ foo@bar:~$ docker rm <container id>
 
 ### Running the Example Enterprise Application for Asynchronous Conversations
 
-Make sure the Prerequisite Component instances are running before proceeding! Clone the [Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation) repo and the change your working directory to the root of that repo.
+Make sure the Prerequisite Component instances are running before proceeding! Clone the [Enterprise Conversation Application](https://github.com/dvonthenen/enterprise-conversation-application) repo and the change your working directory to the root of that repo.
 
 ```bash
-foo@bar:~$ git clone git@github.com:dvonthenen/enterprise-reference-implementation.git
-foo@bar:~$ cd enterprise-reference-implementation
+foo@bar:~$ git clone git@github.com:dvonthenen/enterprise-conversation-application.git
+foo@bar:~$ cd enterprise-conversation-application
 ```
 
-Once you are at the root of the repo, you can start the [Symbl Asynchronous REST/Dataminer Service](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-asynchronous-dataminer) in the console by running the following commands:
+Once you are at the root of the repo, you can start the [Symbl Asynchronous REST/Dataminer Service](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/symbl-asynchronous-dataminer) in the console by running the following commands:
 
 ```bash
 foo@bar:~$ cd ./cmd/symbl-asynchronous-dataminer
 foo@bar:~$ go run cmd.go
 ```
 
-In a new console window when you are at the root of the repo, you can start the [Example Middleware Plugin](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-asynchronous-plugin) by running the following commands:
+In a new console window when you are at the root of the repo, you can start the [Example Middleware Plugin](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/example-asynchronous-plugin) by running the following commands:
 
 ```bash
 foo@bar:~$ cd ./cmd/example-asynchronous-plugin
@@ -124,18 +124,18 @@ The first couple of plugins implemented in this repo are:
 
 ### How Do I Launch These Plugins
 
-To try these plugins out, make sure the Prerequisite Component instances are running before proceeding! Assuming you have already cloned the [Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation), clone the [Enterprise Conversation Plugins](hhttps://github.com/dvonthenen/enterprise-conversation-plugins) repo to your local laptop.
+To try these plugins out, make sure the Prerequisite Component instances are running before proceeding! Assuming you have already cloned the [Enterprise Conversation Application](https://github.com/dvonthenen/enterprise-conversation-application), clone the [Enterprise Conversation Plugins](hhttps://github.com/dvonthenen/enterprise-conversation-plugins) repo to your local laptop.
 
 ```bash
 foo@bar:~$ git clone git@github.com:dvonthenen/enterprise-conversation-plugins.git
-foo@bar:~$ cd enterprise-reference-implementation
+foo@bar:~$ cd enterprise-conversation-application
 ```
 
-Like before, start the [Symbl Asynchronous REST/Dataminer Service](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-asynchronous-dataminer) in the console by running the following commands:
+Like before, start the [Symbl Asynchronous REST/Dataminer Service](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/symbl-asynchronous-dataminer) in the console by running the following commands:
 
 In your first console window, run:
 ```bash
-foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-reference-implementation
+foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-conversation-application
 foo@bar:~$ cd ./cmd/symbl-asynchronous-dataminer
 foo@bar:~$ go run cmd.go
 ```

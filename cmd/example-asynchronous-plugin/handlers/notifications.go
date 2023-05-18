@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package handlers
@@ -8,9 +8,9 @@ import (
 
 	klog "k8s.io/klog/v2"
 
-	interfacessdk "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/interfaces"
-	shared "github.com/dvonthenen/enterprise-reference-implementation/pkg/shared"
-	utils "github.com/dvonthenen/enterprise-reference-implementation/pkg/utils"
+	interfacessdk "github.com/dvonthenen/enterprise-conversation-application/pkg/middleware-plugin-sdk/interfaces"
+	shared "github.com/dvonthenen/enterprise-conversation-application/pkg/shared"
+	utils "github.com/dvonthenen/enterprise-conversation-application/pkg/utils"
 )
 
 func NewHandler(options HandlerOptions) *Handler {

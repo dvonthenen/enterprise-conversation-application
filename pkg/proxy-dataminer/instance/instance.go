@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package instance
@@ -18,8 +18,8 @@ import (
 	sse "github.com/r3labs/sse/v2"
 	klog "k8s.io/klog/v2"
 
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
-	routing "github.com/dvonthenen/enterprise-reference-implementation/pkg/proxy-dataminer/routing"
+	interfaces "github.com/dvonthenen/enterprise-conversation-application/pkg/interfaces"
+	routing "github.com/dvonthenen/enterprise-conversation-application/pkg/proxy-dataminer/routing"
 )
 
 func New(options ProxyOptions) *Proxy {

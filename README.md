@@ -1,9 +1,9 @@
-# Reference Implementation for a Symbl.ai Enterprise Application
+# Symbl.ai Enterprise Conversation Application
 
 The goal of this repository is to provide both:
 
 - an architecture for a highly scalable application with Enterprise class features used for Conversation Understanding
-- a concrete example to be used as a Reference Implementation for the Architecture described above
+- an off-the-shell Conversation Application implemented in an Enterprise-y Architecture
 
 ## Characteristics of an Enterprise Conversation Application
 
@@ -25,9 +25,9 @@ In addition to the above characteristics, Enterprise-class features specifically
 
 This is a high-level block diagram, that satisfies the above characteristics, for what the architecture of an Enterprise Conversation could look like...
 
-![Enterprise Reference Architecture](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-architecture.png?raw=true)
+![Enterprise Conversation Architecture](https://github.com/dvonthenen/enterprise-conversation-application/blob/main/docs/images/enterprise-architecture.png?raw=true)
 
-Feature Benefits for this Enterprise Reference Architecture:
+Feature Benefits for this Enterprise Conversation Architecture:
 
 - Build applications with a historical conversation context
 - Persist conversation insights (data ownership)
@@ -49,7 +49,7 @@ This architecture consists of several components which differ based on the type 
 
 #### **Symbl.ai Proxy/Dataminer Service**
 
-This [Symbl.ai Proxy/Dataminer Service](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer) aims to ingest the data, create any additional metadata to associate with these insights, and then save this context to recall later. There happens to be an excellent platform that does all of the heavy lifting for us, **cough cough** the [Symbl Platform](https://platform.symbl.ai). Using the Symbl Platform, we can extract these conversation insights without having to train models, have expertise in Artificial Intelligence or Machine Learning, or require a team of data scientists.
+This [Symbl.ai Proxy/Dataminer Service](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/symbl-proxy-dataminer) aims to ingest the data, create any additional metadata to associate with these insights, and then save this context to recall later. There happens to be an excellent platform that does all of the heavy lifting for us, **cough cough** the [Symbl Platform](https://platform.symbl.ai). Using the Symbl Platform, we can extract these conversation insights without having to train models, have expertise in Artificial Intelligence or Machine Learning, or require a team of data scientists.
 
 Preserving insights represents the first of two significant pieces of work in this design. In order to aggregate conversation insights from external conversation sources and through historical data, we need to have a method for persisting this data to recall and make associations to conversations happening now. This component bites off this aspect of the design.
 
@@ -57,13 +57,13 @@ This Proxy/Dataminer Service makes use of the [Realtime/Streaming API](https://d
 
 #### **Symbl.ai Asynchronous Service**
 
-This [Symbl Asynchronous REST/Dataminer Service](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-rest-dataminer) component can and should be re-used as-is. This does a lot of the heavy-lifting and will save you some time to implement a custom component and database schema that essentially can be reused as an off-the-shelf component. It is highly encouraged to use this component for reasons we will get into later on.
+This [Symbl Asynchronous REST/Dataminer Service](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/symbl-rest-dataminer) component can and should be re-used as-is. This does a lot of the heavy-lifting and will save you some time to implement a custom component and database schema that essentially can be reused as an off-the-shelf component. It is highly encouraged to use this component for reasons we will get into later on.
 
 This REST/Dataminer Service makes use of the [Asynchronous API](https://docs.symbl.ai/docs/async-api) to receive conversation insights from the Symbl Platform. This component exposes a REST endpoint which takes in a conversation ID and then retreives all of the conversation insights for that pre-processed conversation ID. For each insight retrieved from the platform, this component will also persist conversation insights into a graph database and then send a corresponding RabbitMQ message for each type of insight. This message will then be consumed by your middleware plugin to perform some action of your chosing.
 
 #### **Middleware Plugin**
 
-Middleware Plugins are a significant component required in this Enterprise Reference Implementation for Conversation Analysis. It provides associations or defining the relationships between contextual insights and your business.
+Middleware Plugins are a significant component required in this Enterprise Conversation Application for Conversation Analysis. It provides associations or defining the relationships between contextual insights and your business.
 
 A Middleware Plugin is deeply tied to what your business cares about. This plugin, either in code or interfacing with another external system, captures your company's specific business rules, goals, or what you hope to achieve. For example, these business rules can then be used to notify others within the company to take action, create events that you might want to pass along to other software systems, or trigger actions you want to perform directly in this component.
 
@@ -88,21 +88,21 @@ If you are processing **ONLY** Asynchronous conversations, you will not have an 
 There are 3 main configurations for the implementation contained in this repo.
 
 **Realtime Conversation Processing**
-To deploy this configuration, follow this setup guide: [https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/realtime-setup.md](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/realtime-setup.md).
+To deploy this configuration, follow this setup guide: [https://github.com/dvonthenen/enterprise-conversation-application/tree/main/docs/realtime-setup.md](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/docs/realtime-setup.md).
 
-[![Realtime Conversation Processing](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-realtime-architecture.png?raw=true)](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/realtime-setup.md)
+[![Realtime Conversation Processing](https://github.com/dvonthenen/enterprise-conversation-application/blob/main/docs/images/enterprise-realtime-architecture.png?raw=true)](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/docs/realtime-setup.md)
 
 **Asynchronous Conversation Processing**
-To deploy this configuration, follow this setup guide: [https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/asynchronous-setup.md](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/asynchronous-setup.md).
+To deploy this configuration, follow this setup guide: [https://github.com/dvonthenen/enterprise-conversation-application/tree/main/docs/asynchronous-setup.md](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/docs/asynchronous-setup.md).
 
-[![Asynchronous Conversation Processing](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-asynchronous-architecture.png?raw=true)](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/asynchronous-setup.md).
+[![Asynchronous Conversation Processing](https://github.com/dvonthenen/enterprise-conversation-application/blob/main/docs/images/enterprise-asynchronous-architecture.png?raw=true)](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/docs/asynchronous-setup.md).
 
 **Realtime and Asynchronous Conversation Process**
 To deploy this configuration, follow each setup guide above. The setup is independent of each other and the only share components between these two configurations are the [Neo4J](https://neo4j.com/) Database and [RabbitMQ](https://rabbitmq.com/) Server.
 
 ## More Information
 
-If you are looking for a detailed description and even a video that walks through this architecture diagram, please look at this blog called [Everything to Know About Enterprise Reference Implementation for Conversation Aggregation](https://symbl.ai/blog/everything-to-know-about-enterprise-reference-implementation-for-conversation-aggregation/).
+If you are looking for a detailed description and even a video that walks through this architecture diagram, please look at this blog called [Everything to Know About Enterprise Conversation Application for Conversation Aggregation](https://symbl.ai/blog/everything-to-know-about-enterprise-conversation-application-for-conversation-aggregation/).
 
 Looking for more information about deployment strategies as they relate to storage, take a look at this blog post called [Databases and Persistent Storage for Conversation Data](https://symbl.ai/blog/databases-and-persistent-storage-for-conversation-data/).
 

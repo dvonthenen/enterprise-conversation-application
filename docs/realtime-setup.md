@@ -10,7 +10,7 @@ There are 3 components within this repo that correspond to the components in the
 
 If you place these component within the architecture diagram, you get the implementation diagram for your application below:
 
-![Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-realtime-architecture.png?raw=true)
+![Enterprise Conversation Application](https://github.com/dvonthenen/enterprise-conversation-application/blob/main/docs/images/enterprise-realtime-architecture.png?raw=true)
 
 And that implementation leverages these external software platforms:
 
@@ -23,19 +23,19 @@ And that implementation leverages these external software platforms:
 
 ## Symbl.ai Proxy/Dataminer Service
 
-This [Symbl.ai Proxy/Dataminer Service](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer) aims to ingest the data, create any additional metadata to associate with these insights, and then save this context to recall later. There happens to be an excellent platform that does all of the heavy lifting for us, **cough cough** the [Symbl Platform](https://platform.symbl.ai). Using the Symbl Platform, we can extract these conversation insights without having to train models, have expertise in Artificial Intelligence or Machine Learning, or require a team of data scientists.
+This [Symbl.ai Proxy/Dataminer Service](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/symbl-proxy-dataminer) aims to ingest the data, create any additional metadata to associate with these insights, and then save this context to recall later. There happens to be an excellent platform that does all of the heavy lifting for us, **cough cough** the [Symbl Platform](https://platform.symbl.ai). Using the Symbl Platform, we can extract these conversation insights without having to train models, have expertise in Artificial Intelligence or Machine Learning, or require a team of data scientists.
 
 This Proxy/Dataminer Service makes use of the [Realtime/Streaming API](https://docs.symbl.ai/docs/streaming-api) to receive conversation insights from the Symbl Platform. For each realtime insight emitted by the platform, this component will persist the conversation insight into the graph database and then send a corresponding RabbitMQ message for that insight. This message will then be consumed by your middleware plugin to perform some action of your chosing.
 
 ## Example Realtime Middleware Plugin
 
-The [Example Realtime Middleware Plugin](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-realtime-plugin) contained in the repo is only a starting point for your own implementation of a plugin. This scaffold code should be modified to capture your business rules to fit your specific business needs.
+The [Example Realtime Middleware Plugin](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/example-realtime-plugin) contained in the repo is only a starting point for your own implementation of a plugin. This scaffold code should be modified to capture your business rules to fit your specific business needs.
 
 This example makes use of the [Realtime Streaming API](https://docs.symbl.ai/docs/streaming-api) to receive conversation insights from the Symbl Platform. This generic scaffold implementation sends an example **Application Specific Message** for each type Symbl insight (Topics, Trackers, Entities, etc). These application specific messages are unique to your business and what you care about. These messages are created by your Middleware Plugin and sent to your UI or Client Interface.
 
 ## Example Simple Client
 
-Instead of building out a full blown web client using a [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) platform, this repo provides a simple client that takes your local laptop's microphone input to provide the conversation. That's what this [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-realtime-simulated-client) does.
+Instead of building out a full blown web client using a [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) platform, this repo provides a simple client that takes your local laptop's microphone input to provide the conversation. That's what this [Example Simulated Client App](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/example-realtime-simulated-client) does.
 
 > **_NOTE:_** A web UI based example is coming shortly!
 
@@ -87,35 +87,35 @@ foo@bar:~$ docker rm <container id>
 
 ### Running the Example Enterprise Application for Realtime Conversations
 
-Make sure the Prerequisite Component instances are running before proceeding! Clone the [Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation) repo and the change your working directory to the root of that repo.
+Make sure the Prerequisite Component instances are running before proceeding! Clone the [Enterprise Conversation Application](https://github.com/dvonthenen/enterprise-conversation-application) repo and the change your working directory to the root of that repo.
 
 ```bash
-foo@bar:~$ git clone git@github.com:dvonthenen/enterprise-reference-implementation.git
-foo@bar:~$ cd enterprise-reference-implementation
+foo@bar:~$ git clone git@github.com:dvonthenen/enterprise-conversation-application.git
+foo@bar:~$ cd enterprise-conversation-application
 ```
 
-Once you are at the root of the repo, you can start the [Symbl Proxy/Dataminer Service](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer) in the console by running the following commands:
+Once you are at the root of the repo, you can start the [Symbl Proxy/Dataminer Service](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/symbl-proxy-dataminer) in the console by running the following commands:
 
 ```bash
 foo@bar:~$ cd ./cmd/symbl-proxy-dataminer
 foo@bar:~$ go run cmd.go
 ```
 
-In a new console window when you are at the root of the repo, you can start the [Example Middleware Plugin](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-realtime-plugin) by running the following commands:
+In a new console window when you are at the root of the repo, you can start the [Example Middleware Plugin](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/example-realtime-plugin) by running the following commands:
 
 ```bash
 foo@bar:~$ cd ./cmd/example-realtime-plugin
 foo@bar:~$ go run cmd.go
 ```
 
-Create a third/new console window when you are at the root of the repo, you can start the [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-realtime-simulated-client) by running the following commands:
+Create a third/new console window when you are at the root of the repo, you can start the [Example Simulated Client App](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/example-realtime-simulated-client) by running the following commands:
 
 ```bash
 foo@bar:~$ cd ./cmd/example-realtime-simulated-client
 foo@bar:~$ go run cmd.go
 ```
 
-Once the [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-realtime-simulated-client) is running, you should be able to speak into your microphone to simulate a conversation that would take place on various platforms like a [Zoom](https://zoom.us/) meeting, on a [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) platform, etc.
+Once the [Example Simulated Client App](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/example-realtime-simulated-client) is running, you should be able to speak into your microphone to simulate a conversation that would take place on various platforms like a [Zoom](https://zoom.us/) meeting, on a [CPaaS](https://www.gartner.com/en/information-technology/glossary/communications-platform-service-cpaas) platform, etc.
 
 As you start to speak into your microphone, you should see example application specific messages come through on the example client. Pretty simple!
 
@@ -129,18 +129,18 @@ The first couple of plugins implemented in this repo are:
 
 ### How Do I Launch These Plugins
 
-To try these plugins out, make sure the Prerequisite Component instances are running before proceeding! Assuming you have already cloned the [Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation), clone the [Enterprise Conversation Plugins](hhttps://github.com/dvonthenen/enterprise-conversation-plugins) repo to your local laptop.
+To try these plugins out, make sure the Prerequisite Component instances are running before proceeding! Assuming you have already cloned the [Enterprise Conversation Application](https://github.com/dvonthenen/enterprise-conversation-application), clone the [Enterprise Conversation Plugins](hhttps://github.com/dvonthenen/enterprise-conversation-plugins) repo to your local laptop.
 
 ```bash
 foo@bar:~$ git clone git@github.com:dvonthenen/enterprise-conversation-plugins.git
-foo@bar:~$ cd enterprise-reference-implementation
+foo@bar:~$ cd enterprise-conversation-application
 ```
 
-Like before, start the [Symbl Proxy/Dataminer Service](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/symbl-proxy-dataminer) in the console by running the following commands:
+Like before, start the [Symbl Proxy/Dataminer Service](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/symbl-proxy-dataminer) in the console by running the following commands:
 
 In your first console windows, run:
 ```bash
-foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-reference-implementation
+foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-conversation-application
 foo@bar:~$ cd ./cmd/symbl-proxy-dataminer
 foo@bar:~$ go run cmd.go
 ```
@@ -161,10 +161,10 @@ foo@bar:~$ cd ./plugins/realtime/statistical
 foo@bar:~$ go run cmd.go
 ```
 
-Finally, create a fourth console window to start the [Example Simulated Client App](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/cmd/example-realtime-simulated-client) by running the following commands:
+Finally, create a fourth console window to start the [Example Simulated Client App](https://github.com/dvonthenen/enterprise-conversation-application/tree/main/cmd/example-realtime-simulated-client) by running the following commands:
 
 ```bash
-foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-reference-implementation
+foo@bar:~$ cd ${REPLACE WITH YOUR ROOT DIR}/enterprise-conversation-application
 foo@bar:~$ cd ./cmd/example-realtime-simulated-client
 foo@bar:~$ go run cmd.go
 ```

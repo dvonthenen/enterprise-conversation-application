@@ -1,10 +1,10 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package interfaces
 
 import (
-	pluginsdkmsg "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
+	pluginsdkmsg "github.com/dvonthenen/enterprise-conversation-application/pkg/interfaces"
 )
 
 /*
