@@ -48,37 +48,6 @@ func (mh *MessageHandler) Init() error {
 		return err
 	}
 
-	// context
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// neo4j create conversation object
-	_, err = (*mh.neo4jMgr).ExecuteWrite(ctx,
-		func(tx neo4j.ManagedTransaction) (any, error) {
-			createConversationQuery := utils.ReplaceIndexes(`
-				MERGE (c:Conversation { #conversation_index#: $conversation_id })
-					ON CREATE SET
-						c.createdAt = datetime(),
-						c.lastAccessed = datetime()
-					ON MATCH SET
-						c.lastAccessed = datetime()
-				SET c = { #conversation_index#: $conversation_id, createdAt: datetime(), lastAccessed: datetime() }
-				`)
-			result, err := tx.Run(ctx, createConversationQuery, map[string]any{
-				"conversation_id": mh.conversationId,
-			})
-			if err != nil {
-				klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
-				return nil, err
-			}
-			return result.Collect(ctx)
-		})
-	if err != nil {
-		klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
-		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
-		return err
-	}
-
 	klog.V(4).Infof("MessageHandler.Init Succeeded\n")
 	klog.V(6).Infof("MessageHandler.Init LEAVE\n")
 
@@ -90,73 +59,73 @@ func (mh *MessageHandler) setupRabbitChannels() error {
 		Setup Publishers...
 	*/
 	_, err := (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        shared.RabbitExchangeConversationInit,
+		Name:        shared.RabbitRealTimeConversationInit,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeConversationInit, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitRealTimeConversationInit, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        shared.RabbitExchangeMessage,
+		Name:        shared.RabbitRealTimeMessage,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeMessage, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitRealTimeMessage, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        shared.RabbitExchangeTopic,
+		Name:        shared.RabbitRealTimeTopic,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeTopic, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitRealTimeTopic, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        shared.RabbitExchangeTracker,
+		Name:        shared.RabbitRealTimeTracker,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeTracker, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitRealTimeTracker, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        shared.RabbitExchangeEntity,
+		Name:        shared.RabbitRealTimeEntity,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeEntity, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitRealTimeEntity, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        shared.RabbitExchangeInsight,
+		Name:        shared.RabbitRealTimeInsight,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeInsight, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitRealTimeInsight, err)
 		return err
 	}
 	_, err = (*mh.rabbitMgr).CreatePublisher(rabbitinterfaces.PublisherOptions{
-		Name:        shared.RabbitExchangeConversationTeardown,
+		Name:        shared.RabbitRealTimeConversationTeardown,
 		Type:        rabbitinterfaces.ExchangeTypeFanout,
 		AutoDeleted: true,
 		IfUnused:    true,
 	})
 	if err != nil {
-		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitExchangeConversationTeardown, err)
+		klog.V(1).Infof("CreatePublisher %s failed. Err: %v\n", shared.RabbitRealTimeConversationTeardown, err)
 		return err
 	}
 
@@ -195,8 +164,50 @@ func (mh *MessageHandler) InitializedConversation(im *sdkinterfaces.Initializati
 	klog.V(2).Infof("InitializationMessage:\n%v\n\n", string(prettyJson))
 	klog.V(6).Infof("-------------------------------\n\n")
 
+	// context
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// neo4j create conversation object
+	_, err = (*mh.neo4jMgr).ExecuteWrite(ctx,
+		func(tx neo4j.ManagedTransaction) (any, error) {
+			createConversationQuery := utils.ReplaceIndexes(`
+				MERGE (c:Conversation { #conversation_index#: $conversation_id })
+					ON CREATE SET
+						c.createdAt = datetime(),
+						c.lastAccessed = datetime()
+					ON MATCH SET
+						c.lastAccessed = datetime()
+				SET c = { #conversation_index#: $conversation_id, createdAt: datetime(), lastAccessed: datetime() }
+				`)
+			result, err := tx.Run(ctx, createConversationQuery, map[string]any{
+				"conversation_id": mh.conversationId,
+			})
+			if err != nil {
+				klog.V(1).Infof("neo4j.Run failed create conversation object. Err: %v\n", err)
+				return nil, err
+			}
+			return result.Collect(ctx)
+		})
+	if err != nil {
+		klog.V(1).Infof("neo4j.ExecuteWrite failed. Err: %v\n", err)
+		klog.V(6).Infof("MessageHandler.Init LEAVE\n")
+		return err
+	}
+
 	// rabbitmq
-	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeConversationInit, data)
+	wrapperStruct := shared.InitializationResponse{
+		InitializationMessage: im,
+	}
+
+	data, err = json.Marshal(wrapperStruct)
+	if err != nil {
+		klog.V(1).Infof("InitializedConversation json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("InitializedConversation LEAVE\n")
+		return err
+	}
+
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitRealTimeConversationInit, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -388,7 +399,7 @@ func (mh *MessageHandler) MessageResponseMessage(mr *sdkinterfaces.MessageRespon
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeMessage, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitRealTimeMessage, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -451,7 +462,7 @@ func (mh *MessageHandler) InsightResponseMessage(ir *sdkinterfaces.InsightRespon
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeInsight, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitRealTimeInsight, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -578,7 +589,7 @@ func (mh *MessageHandler) TopicResponseMessage(tr *sdkinterfaces.TopicResponse) 
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeTopic, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitRealTimeTopic, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -744,7 +755,7 @@ func (mh *MessageHandler) TrackerResponseMessage(tr *sdkinterfaces.TrackerRespon
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeTracker, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitRealTimeTracker, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -886,7 +897,7 @@ func (mh *MessageHandler) EntityResponseMessage(er *sdkinterfaces.EntityResponse
 		return err
 	}
 
-	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeEntity, data)
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitRealTimeEntity, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
@@ -928,7 +939,18 @@ func (mh *MessageHandler) TeardownConversation(tm *sdkinterfaces.TeardownMessage
 	klog.V(6).Infof("-------------------------------\n\n")
 
 	// rabbitmq
-	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitExchangeConversationTeardown, data)
+	wrapperStruct := shared.TeardownResponse{
+		TeardownMessage: tm,
+	}
+
+	data, err = json.Marshal(wrapperStruct)
+	if err != nil {
+		klog.V(1).Infof("InitializedConversation json.Marshal failed. Err: %v\n", err)
+		klog.V(6).Infof("InitializedConversation LEAVE\n")
+		return err
+	}
+
+	err = (*mh.rabbitMgr).PublishMessageByName(shared.RabbitRealTimeConversationTeardown, data)
 	if err != nil {
 		klog.V(1).Infof("PublishMessageByName failed. Err: %v\n", err)
 		klog.V(6).Infof("InitializedConversation LEAVE\n")
