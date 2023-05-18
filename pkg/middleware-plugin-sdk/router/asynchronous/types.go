@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package router
@@ -6,7 +6,7 @@ package router
 import (
 	rabbitinterfaces "github.com/dvonthenen/rabbitmq-manager/pkg/interfaces"
 
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/interfaces"
+	interfaces "github.com/dvonthenen/enterprise-conversation-application/pkg/middleware-plugin-sdk/interfaces"
 )
 
 /*

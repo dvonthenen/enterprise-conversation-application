@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package handlers
@@ -10,12 +10,12 @@ import (
 	sdkinterfaces "github.com/dvonthenen/symbl-go-sdk/pkg/api/streaming/v1/interfaces"
 	klog "k8s.io/klog/v2"
 
-	pluginsdkmsg "github.com/dvonthenen/enterprise-reference-implementation/pkg/interfaces"
-	interfacessdk "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk/interfaces"
-	shared "github.com/dvonthenen/enterprise-reference-implementation/pkg/shared"
-	utils "github.com/dvonthenen/enterprise-reference-implementation/pkg/utils"
+	pluginsdkmsg "github.com/dvonthenen/enterprise-conversation-application/pkg/interfaces"
+	interfacessdk "github.com/dvonthenen/enterprise-conversation-application/pkg/middleware-plugin-sdk/interfaces"
+	shared "github.com/dvonthenen/enterprise-conversation-application/pkg/shared"
+	utils "github.com/dvonthenen/enterprise-conversation-application/pkg/utils"
 
-	interfaces "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-realtime-plugin/interfaces"
+	interfaces "github.com/dvonthenen/enterprise-conversation-application/cmd/example-realtime-plugin/interfaces"
 )
 
 func NewHandler(options HandlerOptions) *Handler {

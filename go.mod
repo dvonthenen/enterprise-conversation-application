@@ -1,4 +1,4 @@
-module github.com/dvonthenen/enterprise-reference-implementation
+module github.com/dvonthenen/enterprise-conversation-application
 
 go 1.18
 

@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package main
@@ -9,9 +9,9 @@ import (
 	"os"
 	"os/signal"
 
-	middlewaresdk "github.com/dvonthenen/enterprise-reference-implementation/pkg/middleware-plugin-sdk"
+	middlewaresdk "github.com/dvonthenen/enterprise-conversation-application/pkg/middleware-plugin-sdk"
 
-	server "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-asynchronous-plugin/server"
+	server "github.com/dvonthenen/enterprise-conversation-application/cmd/example-asynchronous-plugin/server"
 )
 
 func main() {

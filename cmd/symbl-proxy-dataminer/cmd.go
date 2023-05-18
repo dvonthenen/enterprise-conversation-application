@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package main
@@ -9,7 +9,7 @@ import (
 	"os"
 	"os/signal"
 
-	dataminer "github.com/dvonthenen/enterprise-reference-implementation/pkg/proxy-dataminer"
+	dataminer "github.com/dvonthenen/enterprise-conversation-application/pkg/proxy-dataminer"
 )
 
 func main() {

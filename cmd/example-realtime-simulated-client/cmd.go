@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package main
@@ -19,7 +19,7 @@ import (
 	symbl "github.com/dvonthenen/symbl-go-sdk/pkg/client"
 	interfaces "github.com/dvonthenen/symbl-go-sdk/pkg/client/interfaces"
 
-	handlers "github.com/dvonthenen/enterprise-reference-implementation/cmd/example-realtime-simulated-client/handlers"
+	handlers "github.com/dvonthenen/enterprise-conversation-application/cmd/example-realtime-simulated-client/handlers"
 )
 
 type HeadersContext struct{}

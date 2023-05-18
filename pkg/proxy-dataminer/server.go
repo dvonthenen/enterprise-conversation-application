@@ -1,4 +1,4 @@
-// Copyright 2023 Enterprise Reference Implementation contributors. All Rights Reserved.
+// Copyright 2023 Enterprise Conversation Application contributors. All Rights Reserved.
 // SPDX-License-Identifier: Apache License 2.0
 
 package dataminer
@@ -16,7 +16,7 @@ import (
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	klog "k8s.io/klog/v2"
 
-	instance "github.com/dvonthenen/enterprise-reference-implementation/pkg/proxy-dataminer/instance"
+	instance "github.com/dvonthenen/enterprise-conversation-application/pkg/proxy-dataminer/instance"
 )
 
 func New(options ServerOptions) (*Server, error) {
