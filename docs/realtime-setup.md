@@ -10,7 +10,7 @@ There are 3 components within this repo that correspond to the components in the
 
 If you place these component within the architecture diagram, you get the implementation diagram for your application below:
 
-![Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-architecture-implementation.png?raw=true)
+![Enterprise Reference Implementation](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-realtime-architecture.png?raw=true)
 
 And that implementation leverages these external software platforms:
 
