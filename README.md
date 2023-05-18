@@ -90,8 +90,12 @@ There are 3 main configurations for the implementation contained in this repo.
 **Realtime Conversation Processing**
 To deploy this configuration, follow this setup guide: [https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/realtime-setup.md](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/realtime-setup.md).
 
+[![Realtime Conversation Processing](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-realtime-architecture.png?raw=true)](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/realtime-setup.md)
+
 **Asynchronous Conversation Processing**
 To deploy this configuration, follow this setup guide: [https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/asynchronous-setup.md](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/asynchronous-setup.md).
+
+[![Asynchronous Conversation Processing](https://github.com/dvonthenen/enterprise-reference-implementation/blob/main/docs/images/enterprise-asynchronous-architecture.png?raw=true)](https://github.com/dvonthenen/enterprise-reference-implementation/tree/main/docs/asynchronous-setup.md).
 
 **Realtime and Asynchronous Conversation Process**
 To deploy this configuration, follow each setup guide above. The setup is independent of each other and the only share components between these two configurations are the [Neo4J](https://neo4j.com/) Database and [RabbitMQ](https://rabbitmq.com/) Server.
